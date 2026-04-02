@@ -1,8 +1,8 @@
-const { PDFDocument } = PDFLib;
+import { PDFDocument } from 'pdf-lib';
 
 // Resource URLs for dynamic importing
-const ENCRYPT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@pdfsmaller/pdf-encrypt-lite/+esm';
-const DECRYPT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@pdfsmaller/pdf-decrypt-lite/+esm';
+const ENCRYPT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@pdfsmaller/pdf-encrypt-lite@1.0.1/+esm';
+const DECRYPT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@pdfsmaller/pdf-decrypt-lite@1.0.1/+esm';
 
 export async function mergePDFs(files) {
     const mergedPdf = await PDFDocument.create();
