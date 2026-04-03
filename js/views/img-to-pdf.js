@@ -1,4 +1,5 @@
-const { PDFDocument } = PDFLib;
+// PDFLib will be accessed safely within the process function
+
 
 export function renderImgToPdf(container) {
     container.innerHTML = `
@@ -84,6 +85,10 @@ export function renderImgToPdf(container) {
         btnProcess.disabled = true;
 
         try {
+            const pLib = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+            if (!pLib) throw new Error("PDF library not loaded.");
+            const { PDFDocument } = pLib;
+
             const pdfDoc = await PDFDocument.create();
             
             for (let file of selectedFiles) {

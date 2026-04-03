@@ -1,4 +1,5 @@
-const { PDFDocument } = PDFLib;
+// PDFLib will be accessed safely within the process function
+
 
 export function renderCompress(container) {
     container.innerHTML = `
@@ -95,6 +96,10 @@ export function renderCompress(container) {
         const compType = document.querySelector('input[name="comp-type"]:checked').value;
 
         try {
+            const pLib = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+            if (!pLib) throw new Error("PDF library not loaded.");
+            const { PDFDocument } = pLib;
+
             const arrayBuffer = await selectedFile.arrayBuffer();
             let pdfBytes;
             
@@ -104,7 +109,10 @@ export function renderCompress(container) {
                 pdfBytes = await pdfDoc.save({ useObjectStreams: true }); 
             } else {
                 // Extreme PDF Compression: Render to Canvas + Downsample to JPEG
-                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pJS = window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+                if (!pJS) throw new Error("pdf.js library not loaded.");
+
+                const loadingTask = pJS.getDocument({ data: arrayBuffer });
                 const pdf = await loadingTask.promise;
                 
                 const newPdfDoc = await PDFDocument.create();
@@ -128,8 +136,11 @@ export function renderCompress(container) {
                     // Convert canvas to highly compressed JPEG
                     const imgDataUrl = canvas.toDataURL('image/jpeg', 0.6);
                     
+                    // Strip the "data:image/jpeg;base64," prefix for more robust embedding
+                    const base64Data = imgDataUrl.split(',')[1];
+                    
                     // Embed to new PDF
-                    const jpgImage = await newPdfDoc.embedJpg(imgDataUrl);
+                    const jpgImage = await newPdfDoc.embedJpg(base64Data);
                     const newPage = newPdfDoc.addPage([viewport.width, viewport.height]);
                     
                     newPage.drawImage(jpgImage, {

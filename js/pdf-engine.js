@@ -1,15 +1,20 @@
-const { PDFDocument } = PDFLib;
+// Safe library accessors
+const getPDFLib = () => window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+const getPDFJS = () => window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+
 
 // Resource URLs for dynamic importing
 const ENCRYPT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@pdfsmaller/pdf-encrypt-lite/+esm';
 const DECRYPT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@pdfsmaller/pdf-decrypt-lite/+esm';
 
 export async function mergePDFs(files) {
-    const mergedPdf = await PDFDocument.create();
+    const pLib = getPDFLib();
+    if (!pLib) throw new Error("PDF library not loaded.");
+    const mergedPdf = await pLib.PDFDocument.create();
     
     for (let file of files) {
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await PDFDocument.load(arrayBuffer);
+        const pdf = await pLib.PDFDocument.load(arrayBuffer);
         const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
         copiedPages.forEach((page) => {
             mergedPdf.addPage(page);
@@ -20,8 +25,10 @@ export async function mergePDFs(files) {
 }
 
 export async function splitPDF(file, rangesText) {
+    const pLib = getPDFLib();
+    if (!pLib) throw new Error("PDF library not loaded.");
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await PDFDocument.load(arrayBuffer);
+    const pdf = await pLib.PDFDocument.load(arrayBuffer);
     const totalPages = pdf.getPageCount();
     
     const pagesToKeep = new Set();
@@ -52,7 +59,7 @@ export async function splitPDF(file, rangesText) {
         throw new Error("No valid pages specified based on input ranges.");
     }
     
-    const splitPdf = await PDFDocument.create();
+    const splitPdf = await pLib.PDFDocument.create();
     const copiedPages = await splitPdf.copyPages(pdf, indices);
     copiedPages.forEach(page => splitPdf.addPage(page));
     
@@ -65,6 +72,9 @@ export async function splitPDF(file, rangesText) {
 export async function protectPDF(file, userPassword, ownerPassword) {
     try {
         // Load encryption library dynamically
+        const pLib = getPDFLib();
+        if (!pLib) throw new Error("PDF library not loaded.");
+
         let encryptPDF;
         try {
             const mod = await import(ENCRYPT_LIB_URL);
@@ -97,6 +107,9 @@ export async function protectPDF(file, userPassword, ownerPassword) {
 export async function unlockPDF(file, password) {
     try {
         // Load decryption library dynamically
+        const pLib = getPDFLib();
+        if (!pLib) throw new Error("PDF library not loaded.");
+        
         let decryptPDF, isEncrypted;
         try {
             const mod = await import(DECRYPT_LIB_URL);
@@ -135,8 +148,10 @@ export async function unlockPDF(file, password) {
  * Add page numbers to a PDF
  */
 export async function addPageNumbers(file, format = 'Page {n} of {total}') {
+    const pLib = getPDFLib();
+    if (!pLib) throw new Error("PDF library not loaded.");
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await PDFDocument.load(arrayBuffer);
+    const pdf = await pLib.PDFDocument.load(arrayBuffer);
     const pages = pdf.getPages();
     const total = pages.length;
 
@@ -149,7 +164,7 @@ export async function addPageNumbers(file, format = 'Page {n} of {total}') {
             x: width / 2 - 30,
             y: 20,
             size: 10,
-            color: PDFLib.rgb(0.5, 0.5, 0.5), // Grey color for stealth look
+            color: pLib.rgb(0.5, 0.5, 0.5), // Grey color for stealth look
         });
     }
 
@@ -160,10 +175,12 @@ export async function addPageNumbers(file, format = 'Page {n} of {total}') {
  * Reorder or remove pages from a PDF
  */
 export async function reorderPages(file, indices) {
+    const pLib = getPDFLib();
+    if (!pLib) throw new Error("PDF library not loaded.");
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await PDFDocument.load(arrayBuffer);
+    const pdf = await pLib.PDFDocument.load(arrayBuffer);
     
-    const newPdf = await PDFDocument.create();
+    const newPdf = await pLib.PDFDocument.create();
     const copiedPages = await newPdf.copyPages(pdf, indices);
     copiedPages.forEach(page => newPdf.addPage(page));
     
@@ -174,8 +191,10 @@ export async function reorderPages(file, indices) {
  * Repair a PDF (re-saves it to fix minor structural issues)
  */
 export async function repairPDF(file) {
+    const pLib = getPDFLib();
+    if (!pLib) throw new Error("PDF library not loaded.");
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+    const pdf = await pLib.PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
     // Re-saving with pdf-lib often repairs the cross-reference table and structure
     return await pdf.save();
 }
@@ -184,8 +203,10 @@ export async function repairPDF(file) {
  * Sign a PDF (adds an image signature to a page)
  */
 export async function signPDF(file, signatureImageBuffer, x, y, width, height, pageIndex = 0) {
+    const pLib = getPDFLib();
+    if (!pLib) throw new Error("PDF library not loaded.");
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await PDFDocument.load(arrayBuffer);
+    const pdf = await pLib.PDFDocument.load(arrayBuffer);
     const pages = pdf.getPages();
     const page = pages[pageIndex];
 
@@ -205,8 +226,10 @@ export async function signPDF(file, signatureImageBuffer, x, y, width, height, p
  * Extract text from a PDF using pdf.js
  */
 export async function pdfToText(file) {
+    const pJS = getPDFJS();
+    if (!pJS) throw new Error("pdf.js library not loaded.");
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pdf = await pJS.getDocument({ data: arrayBuffer }).promise;
     let fullText = "";
 
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -223,8 +246,10 @@ export async function pdfToText(file) {
  * Crop a PDF by adjusting MediaBox
  */
 export async function cropPDF(file, left, bottom, right, top) {
+    const pLib = getPDFLib();
+    if (!pLib) throw new Error("PDF library not loaded.");
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await PDFDocument.load(arrayBuffer);
+    const pdf = await pLib.PDFDocument.load(arrayBuffer);
     const pages = pdf.getPages();
 
     for (const page of pages) {

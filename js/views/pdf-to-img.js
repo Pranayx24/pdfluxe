@@ -123,8 +123,11 @@ export function renderPdfToImg(container) {
         btnProcess.disabled = true;
 
         try {
+            const pJS = window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+            if (!pJS) throw new Error("pdf.js library not loaded.");
+
             const fileUrl = URL.createObjectURL(selectedFile);
-            const loadingTask = pdfjsLib.getDocument(fileUrl);
+            const loadingTask = pJS.getDocument(fileUrl);
             const pdf = await loadingTask.promise;
             
             const indices = parsePageRanges(rangeText, pdf.numPages);

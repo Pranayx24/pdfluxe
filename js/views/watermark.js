@@ -1,4 +1,5 @@
-const { PDFDocument, rgb, degrees } = PDFLib;
+// PDFLib will be accessed safely within the process function
+
 
 export function renderWatermark(container) {
     container.innerHTML = `
@@ -76,6 +77,10 @@ export function renderWatermark(container) {
         btnProcess.disabled = true;
 
         try {
+            const pLib = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+            if (!pLib) throw new Error("PDF library not loaded.");
+            const { PDFDocument, rgb, degrees } = pLib;
+
             const arrayBuffer = await selectedFile.arrayBuffer();
             const pdfDoc = await PDFDocument.load(arrayBuffer);
             
