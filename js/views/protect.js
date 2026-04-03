@@ -1,4 +1,4 @@
-import { protectPDF } from '../pdf-engine.js';
+import { protectPDF } from '../pdf-engine.js?v=1.0.1';
 
 /**
  * Renders the Protect PDF view.
