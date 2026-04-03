@@ -1,3 +1,5 @@
+import { getPDFLib } from '../pdf-engine.js';
+
 export function renderScanToPdf(container) {
     // 1. Initial State & Tool Configuration
     let stream = null;
@@ -141,15 +143,6 @@ export function renderScanToPdf(container) {
     const scanCount = document.getElementById('scan-count');
     const canvas = document.getElementById('snapshot-canvas');
 
-    // 4. Helper: Ensure PDFLib is loaded
-    const getPDFLib = () => {
-        const pLib = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
-        if (!pLib) {
-            window.showToast("PDF Lib not found. Please check internet connection.", "error");
-            return null;
-        }
-        return pLib;
-    };
 
     // 5. Camera Control Functions
     const startCamera = async (facing) => {
@@ -262,7 +255,10 @@ export function renderScanToPdf(container) {
         if (capturedImages.length === 0 || isProcessing) return;
         
         const pLib = getPDFLib();
-        if (!pLib) return;
+        if (!pLib) {
+            window.showToast("PDF library not loaded. Please check your connection.", "error");
+            return;
+        }
 
         isProcessing = true;
         const originalBtnText = btnProcess.innerHTML;

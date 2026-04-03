@@ -1,3 +1,5 @@
+import { getPDFJS } from '../pdf-engine.js';
+
 export function renderPdfToWord(container) {
     container.innerHTML = `
         <div class="workspace">
@@ -75,7 +77,7 @@ export function renderPdfToWord(container) {
         btnProcess.disabled = true;
 
         try {
-            const pJS = window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+            const pJS = getPDFJS();
             if (!pJS) throw new Error("pdf.js library not loaded.");
 
             const fileUrl = URL.createObjectURL(selectedFile);

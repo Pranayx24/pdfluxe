@@ -1,6 +1,6 @@
 // Safe library accessors
-const getPDFLib = () => window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
-const getPDFJS = () => window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+export const getPDFLib = () => window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+export const getPDFJS = () => window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
 
 
 // Resource URLs for dynamic importing

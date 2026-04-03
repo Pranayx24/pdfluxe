@@ -1,4 +1,4 @@
-// PDFLib will be accessed safely within the process function
+import { getPDFLib } from '../pdf-engine.js';
 
 
 export function renderWatermark(container) {
@@ -77,7 +77,7 @@ export function renderWatermark(container) {
         btnProcess.disabled = true;
 
         try {
-            const pLib = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+            const pLib = getPDFLib();
             if (!pLib) throw new Error("PDF library not loaded.");
             const { PDFDocument, rgb, degrees } = pLib;
 

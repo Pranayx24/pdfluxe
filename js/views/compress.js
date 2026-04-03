@@ -1,4 +1,4 @@
-// PDFLib will be accessed safely within the process function
+import { getPDFLib, getPDFJS } from '../pdf-engine.js';
 
 
 export function renderCompress(container) {
@@ -96,7 +96,7 @@ export function renderCompress(container) {
         const compType = document.querySelector('input[name="comp-type"]:checked').value;
 
         try {
-            const pLib = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+            const pLib = getPDFLib();
             if (!pLib) throw new Error("PDF library not loaded.");
             const { PDFDocument } = pLib;
 
@@ -109,7 +109,7 @@ export function renderCompress(container) {
                 pdfBytes = await pdfDoc.save({ useObjectStreams: true }); 
             } else {
                 // Extreme PDF Compression: Render to Canvas + Downsample to JPEG
-                const pJS = window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+                const pJS = getPDFJS();
                 if (!pJS) throw new Error("pdf.js library not loaded.");
 
                 const loadingTask = pJS.getDocument({ data: arrayBuffer });
