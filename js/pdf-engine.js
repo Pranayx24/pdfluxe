@@ -71,33 +71,66 @@ export async function splitPDF(file, rangesText) {
  */
 export async function protectPDF(file, userPassword, ownerPassword) {
     try {
-        // Load encryption library dynamically
         const pLib = getPDFLib();
         if (!pLib) throw new Error("PDF library not loaded.");
 
-        let encryptPDF;
+        // Load encryption library dynamically
+        let encryptPDF, isEncrypted;
         try {
             const mod = await import(ENCRYPT_LIB_URL);
-            encryptPDF = mod.encryptPDF;
+            // Some ESM builds might have named exports, others might use default
+            encryptPDF = mod.encryptPDF || (mod.default && mod.default.encryptPDF) || mod.default;
+            
+            // Try to get isEncrypted from either library if possible
+            isEncrypted = mod.isEncrypted;
+            if (!isEncrypted) {
+                try {
+                    const decryptMod = await import(DECRYPT_LIB_URL);
+                    isEncrypted = decryptMod.isEncrypted;
+                } catch(err) { /* ignore */ }
+            }
         } catch (e) {
             console.error("Failed to load PDF encrypt library:", e);
             throw new Error("Unable to load the encryption engine. Please check your internet connection.");
         }
 
+        if (typeof encryptPDF !== 'function') {
+            throw new Error("Encryption engine loaded but is not a valid function.");
+        }
+
         const arrayBuffer = await file.arrayBuffer();
         const pdfBytes = new Uint8Array(arrayBuffer);
         
+        // Check if PDF is already encrypted to avoid double encryption issues
+        if (isEncrypted) {
+            try {
+                const info = await isEncrypted(pdfBytes);
+                if (info && info.encrypted) {
+                    throw new Error("This PDF is already password-protected. Please unlock it first.");
+                }
+            } catch (e) {
+                console.warn("Could not verify encryption status:", e);
+            }
+        }
+
+        // Perform encryption
         const protectedPdfBytes = await encryptPDF(
             pdfBytes,
             userPassword,
             ownerPassword || userPassword
         );
         
+        if (!protectedPdfBytes || protectedPdfBytes.length === 0) {
+            throw new Error("Encryption failed - the engine returned an empty result.");
+        }
+        
         return protectedPdfBytes;
     } catch (error) {
-        console.error("Protect PDF error:", error);
-        if (error.message.includes("Unable to load")) throw error;
-        throw new Error("Encryption failed. This might be due to an unsupported PDF format.");
+        console.error("Protect PDF error detail:", error);
+        if (error.message.includes("Unable to load") || error.message.includes("already-password-protected") || error.message.includes("not a valid function")) {
+            throw error;
+        }
+        throw new Error("Encryption failed: " + (error.message || "Unknown error"));
     }
 }
 
@@ -107,14 +140,11 @@ export async function protectPDF(file, userPassword, ownerPassword) {
 export async function unlockPDF(file, password) {
     try {
         // Load decryption library dynamically
-        const pLib = getPDFLib();
-        if (!pLib) throw new Error("PDF library not loaded.");
-        
         let decryptPDF, isEncrypted;
         try {
             const mod = await import(DECRYPT_LIB_URL);
-            decryptPDF = mod.decryptPDF;
-            isEncrypted = mod.isEncrypted;
+            decryptPDF = mod.decryptPDF || (mod.default && mod.default.decryptPDF) || mod.default;
+            isEncrypted = mod.isEncrypted || (mod.default && mod.default.isEncrypted);
         } catch (e) {
             console.error("Failed to load PDF decrypt library:", e);
             throw new Error("Unable to load the decryption engine. Please check your internet connection.");
