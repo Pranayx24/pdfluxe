@@ -67,53 +67,61 @@ export async function splitPDF(file, rangesText) {
 }
 
 /**
- * Protect PDF with a password
+ * Protect PDF with a password (AES-256)
  */
-export async function protectPDF(file, userPassword, ownerPassword) {
+export async function protectPDF(file, userPassword, ownerPassword = null) {
+    if (!userPassword) throw new Error("A password is required for protection.");
+
     try {
         const pLib = getPDFLib();
-        if (!pLib) throw new Error("PDF library not loaded.");
+        if (!pLib) throw new Error("PDF Library (pdf-lib) is not available. Please refresh the page.");
 
-        // Load encryption library dynamically
+        // Load encryption library dynamically via ESM
         let encryptPDF, isEncrypted;
+        
         try {
+            console.log("Initializing encryption engine...");
             const mod = await import(ENCRYPT_LIB_URL);
-            // Some ESM builds might have named exports, others might use default
-            encryptPDF = mod.encryptPDF || (mod.default && mod.default.encryptPDF) || mod.default;
             
-            // Try to get isEncrypted from either library if possible
-            isEncrypted = mod.isEncrypted;
+            // Flexible extraction for various ESM build types
+            encryptPDF = mod.encryptPDF || (mod.default && mod.default.encryptPDF) || (typeof mod.default === 'function' ? mod.default : null);
+            isEncrypted = mod.isEncrypted || (mod.default && mod.default.isEncrypted);
+            
+            // Fallback for isEncrypted from decryption library if needed
             if (!isEncrypted) {
                 try {
                     const decryptMod = await import(DECRYPT_LIB_URL);
-                    isEncrypted = decryptMod.isEncrypted;
-                } catch(err) { /* ignore */ }
+                    isEncrypted = decryptMod.isEncrypted || (decryptMod.default && decryptMod.default.isEncrypted);
+                } catch(e) { /* ignore */ }
             }
         } catch (e) {
-            console.error("Failed to load PDF encrypt library:", e);
-            throw new Error("Unable to load the encryption engine. Please check your internet connection.");
+            console.error("Encryption engine load failure:", e);
+            throw new Error("Unable to load the encryption engine. Please check your internet connection or disable ad-blockers that might block CDNs.");
         }
 
         if (typeof encryptPDF !== 'function') {
-            throw new Error("Encryption engine loaded but is not a valid function.");
+            console.error("Encryption engine detected but is not a function:", encryptPDF);
+            throw new Error("The encryption engine failed to initialize correctly. Please try a different browser.");
         }
 
         const arrayBuffer = await file.arrayBuffer();
         const pdfBytes = new Uint8Array(arrayBuffer);
         
-        // Check if PDF is already encrypted to avoid double encryption issues
-        if (isEncrypted) {
+        // Optional: Check if already encrypted to prevent double-encryption issues
+        if (typeof isEncrypted === 'function') {
             try {
                 const info = await isEncrypted(pdfBytes);
                 if (info && info.encrypted) {
-                    throw new Error("This PDF is already password-protected. Please unlock it first.");
+                    throw new Error("This PDF is already password-protected. Please unlock it before applying a new password.");
                 }
             } catch (e) {
-                console.warn("Could not verify encryption status:", e);
+                console.warn("Encryption status check skipped:", e);
             }
         }
 
-        // Perform encryption
+        // Perform AES-256 Encryption
+        // Most engines expect (pdfBytes, userPassword, ownerPassword)
+        console.log("Applying AES-256 protection...");
         const protectedPdfBytes = await encryptPDF(
             pdfBytes,
             userPassword,
@@ -121,16 +129,26 @@ export async function protectPDF(file, userPassword, ownerPassword) {
         );
         
         if (!protectedPdfBytes || protectedPdfBytes.length === 0) {
-            throw new Error("Encryption failed - the engine returned an empty result.");
+            throw new Error("The encryption engine returned an empty result.");
         }
         
         return protectedPdfBytes;
     } catch (error) {
-        console.error("Protect PDF error detail:", error);
-        if (error.message.includes("Unable to load") || error.message.includes("already-password-protected") || error.message.includes("not a valid function")) {
+        console.error("Protect PDF detail:", error);
+        // Bubble up specific error messages
+        const knownErrors = [
+            "password-protected", 
+            "Unable to load", 
+            "not a function", 
+            "empty result",
+            "required"
+        ];
+        
+        if (knownErrors.some(ke => error.message.includes(ke))) {
             throw error;
         }
-        throw new Error("Encryption failed: " + (error.message || "Unknown error"));
+        
+        throw new Error("Encryption failed: " + (error.message || "Unknown error during processing"));
     }
 }
 
