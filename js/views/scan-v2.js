@@ -206,20 +206,35 @@ export function renderScanToPdf(container) {
         try {
             console.log("Starting scanner initialization...");
             
-            // 1. START CAMERA IMMEDIATELY (Don't wait for OpenCV)
-            const constraints = {
-                video: { 
-                    facingMode: facingMode, 
-                    width: { ideal: 1280 }, // Lowered to 720p for fast start on more devices
-                    height: { ideal: 720 } 
+            // 1. ATTEMPT HIGH-RES CAMERA ACCESS WITH FALLBACKS
+            const getCamera = async (mode) => {
+                const configs = [
+                    { video: { facingMode: mode, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+                    { video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } } },
+                    { video: { width: { ideal: 1280 }, height: { ideal: 720 } } }, // Universal fallback
+                    { video: true } // Absolute fallback
+                ];
+                
+                for (const config of configs) {
+                    try {
+                        console.log("Trying camera config:", config);
+                        return await navigator.mediaDevices.getUserMedia(config);
+                    } catch (e) {
+                        console.warn("Config failed:", config, e.name);
+                    }
                 }
+                throw new Error("No camera accessible.");
             };
 
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            stream = await getCamera(facingMode);
             video.srcObject = stream;
             
-            // Play video (mute for auto-play policy)
+            // Critical for iOS/Safari
+            video.setAttribute('autoplay', '');
+            video.setAttribute('muted', '');
+            video.setAttribute('playsinline', '');
             video.muted = true;
+            
             await video.play().catch(e => console.warn("Video play error:", e));
 
             // Hide placeholder and show UI once video starts
