@@ -264,9 +264,46 @@ export function renderScanToPdf(container) {
     };
 
     const drawOverlay = (ctx, pts, active) => {
-        ctx.save(); ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.lineTo(pts[3].x, pts[3].y); ctx.closePath();
-        ctx.strokeStyle = active ? '#5dade2' : 'rgba(255,255,255,0.3)'; ctx.lineWidth = 4; ctx.stroke();
-        ctx.fillStyle = active ? 'rgba(93, 173, 226, 0.4)' : 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.restore();
+        ctx.save();
+        
+        // 1. Draw the Pulsed Outer Glow (Premium Adobe Look)
+        const pulse = (Math.sin(Date.now() / 200) + 1) / 2; // 0 to 1
+        const glowOpacity = active ? 0.3 + (pulse * 0.4) : 0.1;
+        
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pts[1].x, pts[1].y);
+        ctx.lineTo(pts[2].x, pts[2].y);
+        ctx.lineTo(pts[3].x, pts[3].y);
+        ctx.closePath();
+        
+        // Inner Fill
+        ctx.fillStyle = active ? `rgba(93, 173, 226, ${0.2 + (pulse * 0.1)})` : 'rgba(255, 255, 255, 0.05)';
+        ctx.fill();
+
+        // Glowing Stroke
+        ctx.strokeStyle = active ? '#5dade2' : 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = active ? 6 : 2;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        // 2. Add Corner Brackets (The "Industrial" look)
+        if (active) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#5dade2';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            
+            pts.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = '#5dade2';
+                ctx.fill();
+            });
+        }
+        
+        ctx.restore();
     };
 
     const captureSnapshot = () => {
