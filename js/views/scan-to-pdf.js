@@ -275,7 +275,7 @@ export function renderScanToPdf(container) {
         detectionLoopActive = true;
         
         // Detection is done on a small downsampled version to save CPU and battery
-        const DETECTION_WIDTH = 400;
+        const DETECTION_WIDTH = 300; // Smaller is faster and often better for edges
         const ratio = video.videoWidth / DETECTION_WIDTH;
         const detHeight = video.videoHeight / ratio;
 
@@ -284,15 +284,16 @@ export function renderScanToPdf(container) {
         const gray = new cv.Mat();
         const blurred = new cv.Mat();
         const thresh = new cv.Mat();
+        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
         const contours = new cv.MatVector();
         const hierarchy = new cv.Mat();
         const cap = new cv.VideoCapture(video);
 
-        console.log("Detection Loop initialized.");
+        console.log("High-Reliability Detection Loop Started.");
 
         const processFrame = () => {
             if (!detectionLoopActive) {
-                srcFull.delete(); srcSmall.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+                srcFull.delete(); srcSmall.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete(); kernel.delete();
                 return;
             }
 
@@ -300,14 +301,15 @@ export function renderScanToPdf(container) {
                 cap.read(srcFull);
                 cv.resize(srcFull, srcSmall, new cv.Size(DETECTION_WIDTH, detHeight), 0, 0, cv.INTER_AREA);
                 
-                // Enhanced preprocessing for better edge detection
+                // Classic Scanner Pipeline: Grayscale -> Blur -> Canny -> Dilate
                 cv.cvtColor(srcSmall, gray, cv.COLOR_RGBA2GRAY);
                 cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+                cv.Canny(blurred, thresh, 75, 200);
                 
-                // Adaptive threshold is more robust for document scanning
-                cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+                // Dilate edges to close gaps (CRITICAL for reliability)
+                cv.dilate(thresh, thresh, kernel, new cv.Point(-1, -1), 1);
                 
-                // Find contours
+                // Find all shapes
                 cv.findContours(thresh, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
                 
                 let maxArea = -1;
@@ -316,14 +318,16 @@ export function renderScanToPdf(container) {
                 for (let i = 0; i < contours.size(); ++i) {
                     let cnt = contours.get(i);
                     let area = cv.contourArea(cnt);
+                    
+                    // Filter out noise early
+                    if (area < (DETECTION_WIDTH * detHeight * 0.05)) continue;
+
                     let peri = cv.arcLength(cnt, true);
                     let approx = new cv.Mat();
-                    
-                    // Slightly more relaxed approximation for handheld devices
-                    cv.approxPolyDP(cnt, approx, 0.025 * peri, true);
+                    cv.approxPolyDP(cnt, approx, 0.03 * peri, true);
 
-                    // Lower area threshold (5% of screen instead of 10%)
-                    if (approx.rows === 4 && area > (DETECTION_WIDTH * detHeight * 0.05) && area > maxArea) {
+                    // If it's a quad and larger than previous best
+                    if (approx.rows === 4 && area > maxArea) {
                         maxArea = area;
                         bestContour = approx;
                     } else {
@@ -362,12 +366,11 @@ export function renderScanToPdf(container) {
                     }
                 }
 
-                // Smooth frame rate
                 setTimeout(() => {
                     scannerAnimationFrame = requestAnimationFrame(processFrame);
                 }, 33); 
             } catch (e) {
-                console.warn("Detection Loop Exception:", e);
+                console.warn("Detection Exception:", e);
                 setTimeout(() => {
                     scannerAnimationFrame = requestAnimationFrame(processFrame);
                 }, 500);
