@@ -237,7 +237,13 @@ export function renderScanToPdf(container) {
         const cv = window.cv;
         detectionLoopActive = true;
         
-        const src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        // Detection is done on a small downsampled version to save CPU and battery
+        const DETECTION_WIDTH = 400;
+        const ratio = video.videoWidth / DETECTION_WIDTH;
+        const detHeight = video.videoHeight / ratio;
+
+        const srcFull = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        const srcSmall = new cv.Mat(detHeight, DETECTION_WIDTH, cv.CV_8UC4);
         const gray = new cv.Mat();
         const blurred = new cv.Mat();
         const thresh = new cv.Mat();
@@ -245,19 +251,22 @@ export function renderScanToPdf(container) {
         const hierarchy = new cv.Mat();
         const cap = new cv.VideoCapture(video);
 
-        let stableCount = 0;
-
         const processFrame = () => {
             if (!detectionLoopActive) {
-                src.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+                srcFull.delete(); srcSmall.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
                 return;
             }
 
             try {
-                cap.read(src);
-                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                // Read full frame
+                cap.read(srcFull);
+                
+                // Downsample for performance (THIS PREVENTS THE UI HANG)
+                cv.resize(srcFull, srcSmall, new cv.Size(DETECTION_WIDTH, detHeight), 0, 0, cv.INTER_AREA);
+                
+                cv.cvtColor(srcSmall, gray, cv.COLOR_RGBA2GRAY);
                 cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-                cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+                cv.Canny(blurred, thresh, 75, 200); // Using Canny for sharper edge detection
                 
                 // Detection logic: find largest contour with 4 corners
                 cv.findContours(thresh, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
@@ -272,7 +281,8 @@ export function renderScanToPdf(container) {
                     let approx = new cv.Mat();
                     cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
 
-                    if (approx.rows === 4 && area > (src.rows * src.cols * 0.1) && area > maxArea) {
+                    // Area threshold adjusted for downsampled image
+                    if (approx.rows === 4 && area > (DETECTION_WIDTH * detHeight * 0.1) && area > maxArea) {
                         maxArea = area;
                         bestContour = approx;
                     } else {
@@ -286,10 +296,13 @@ export function renderScanToPdf(container) {
                 if (bestContour) {
                     const pts = [];
                     for (let i = 0; i < 4; i++) {
-                        pts.push({ x: bestContour.data32S[i * 2], y: bestContour.data32S[i * 2 + 1] });
+                        // Scale points back up to full video resolution
+                        pts.push({ 
+                            x: bestContour.data32S[i * 2] * ratio, 
+                            y: bestContour.data32S[i * 2 + 1] * ratio 
+                        });
                     }
                     
-                    // Order points: TL, TR, BR, BL
                     const ordered = orderPoints(pts);
                     drawOverlay(ctx, ordered, true);
                     lastStablePoints = ordered;
@@ -309,10 +322,15 @@ export function renderScanToPdf(container) {
                     }
                 }
 
-                animationFrameId = requestAnimationFrame(processFrame);
+                // Throttle to ~20FPS to prevent CPU overheating
+                setTimeout(() => {
+                    animationFrameId = requestAnimationFrame(processFrame);
+                }, 30); 
             } catch (e) {
-                console.warn("Detection error (usually safe during transition):", e);
-                animationFrameId = requestAnimationFrame(processFrame);
+                console.warn("Detection error:", e);
+                setTimeout(() => {
+                    animationFrameId = requestAnimationFrame(processFrame);
+                }, 500); // Wait longer on error
             }
         };
 
