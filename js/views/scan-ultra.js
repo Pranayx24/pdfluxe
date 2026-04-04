@@ -22,6 +22,8 @@ export function renderScanToPdf(container) {
     let rawImageData = null;
     let selectedFilter = 'original';
     let processing = false;
+    let torchState = false;
+    let brightnessCheckCounter = 0;
     
     // 1. UI Infrastructure
     container.innerHTML = `
@@ -53,12 +55,6 @@ export function renderScanToPdf(container) {
                     </div>
 
                     <div class="adobe-bottom-hud">
-                        <div class="mode-selector">
-                            <span>WHITEBOARD</span>
-                            <span>BOOK</span>
-                            <span class="active">DOCUMENT</span>
-                            <span>ID CARD</span>
-                        </div>
                         <div class="main-scan-row">
                             <div class="side-btn"><i class="fa-regular fa-image"></i></div>
                             <button id="btn-trigger-scan" class="adobe-capture-btn">
@@ -115,12 +111,12 @@ export function renderScanToPdf(container) {
             .glass-hud-bubble { background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); padding: 0.8rem 1.5rem; border-radius: 12px; font-weight: 600; color: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
             .adobe-mode-badge { background: rgba(255,255,255,0.1); padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 800; color: var(--gold); }
             .btn-icon-blur { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); border:none; color:#fff; cursor:pointer; }
-            .adobe-bottom-hud { position: absolute; bottom: 0; left: 0; right: 0; padding: 1.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.9)); z-index: 40; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
-            .mode-selector { display: flex; gap: 1.5rem; font-size: 0.75rem; font-weight: 800; color: rgba(255,255,255,0.5); }
-            .mode-selector .active { color: #5dade2; }
+            .adobe-bottom-hud { position: absolute; bottom: 0; left: 0; right: 0; padding: 1.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.9)); z-index: 40; display: flex; align-items: center; justify-content: center; }
             .main-scan-row { width: 100%; display: flex; justify-content: space-between; align-items: center; }
-            .adobe-capture-btn .outer { width: 72px; height: 72px; border-radius: 50%; border: 3px solid #fff; padding: 4px; }
-            .adobe-capture-btn .inner { width: 100%; height: 100%; border-radius: 50%; background: #fff; transition: 0.2s; }
+            .adobe-capture-btn { background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; outline: none; }
+            .adobe-capture-btn .outer { width: 76px; height: 76px; border-radius: 50%; border: 4px solid #fff; padding: 5px; display: flex; align-items: center; justify-content: center; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 20px rgba(255,255,255,0.2); }
+            .adobe-capture-btn .inner { width: 100%; height: 100%; border-radius: 50%; background: #fff; transition: all 0.2s ease; box-shadow: inset 0 0 10px rgba(0,0,0,0.1); }
+            .adobe-capture-btn:hover .outer { transform: scale(1.05); border-color: #5dade2; box-shadow: 0 0 25px rgba(93, 173, 226, 0.4); }
             .adobe-capture-btn:active .inner { transform: scale(0.85); background: #5dade2; }
             .adobe-mini-gallery { position: relative; width: 48px; height: 48px; border-radius: 8px; border: 2px solid #fff; background: #222; }
             .adobe-mini-gallery img { width:100%; height:100%; object-fit: cover; }
@@ -190,10 +186,29 @@ export function renderScanToPdf(container) {
         } catch (err) { window.showToast("Camera access denied.", "error"); btnInit.disabled = false; }
     };
 
+    const toggleTorch = async (on) => {
+        if (!stream) return;
+        const track = stream.getVideoTracks()[0];
+        if (!track) return;
+        try {
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            if (capabilities.torch) {
+                await track.applyConstraints({ advanced: [{ torch: on }] });
+                torchState = on;
+            }
+        } catch (e) {}
+    };
+
     const stopScanner = () => {
         detectionLoopActive = false;
         if (scannerAnimationFrame) cancelAnimationFrame(scannerAnimationFrame);
-        if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+        if (stream) { 
+            const track = stream.getVideoTracks()[0];
+            if (track && torchState) track.applyConstraints({ advanced: [{ torch: false }] }).catch(()=>{});
+            stream.getTracks().forEach(t => t.stop()); 
+            stream = null; 
+        }
+        torchState = false;
         scannerInterface.style.display = 'none'; placeholder.style.display = 'flex';
     };
 
@@ -249,6 +264,20 @@ export function renderScanToPdf(container) {
                     }
                     lastStablePoints = ordered; bestPoints.delete();
                 } else if (lastStablePoints) drawOverlay(ctx, lastStablePoints, false);
+
+                // Low light detection
+                brightnessCheckCounter++;
+                if (brightnessCheckCounter % 30 === 0) {
+                    const pixels = frameCtx.getImageData(0, 0, DETECTION_WIDTH, detHeight).data;
+                    let lum = 0;
+                    for (let i = 0; i < pixels.length; i += 16) { // Sample every 4th pixel for speed
+                        lum += (pixels[i] + pixels[i+1] + pixels[i+2]) / 3;
+                    }
+                    const avg = lum / (pixels.length / 16);
+                    if (avg < 45) toggleTorch(true);
+                    else if (avg > 70) toggleTorch(false);
+                }
+
                 scannerAnimationFrame = requestAnimationFrame(processFrame);
             } catch (e) { requestAnimationFrame(processFrame); }
         };
