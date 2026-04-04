@@ -11,7 +11,7 @@ export function renderScanToPdf(container) {
     let facingMode = 'environment';
     let autoCaptureEnabled = true;
     let stabilityCounter = 0;
-    const STABILITY_THRESHOLD = 30; // ~1.5 sec at 20fps
+    const STABILITY_THRESHOLD = 15; // Faster auto-capture (~0.75 sec)
     let lastStablePoints = null;
     let isCapturing = false;
     let cvLoaded = false;
@@ -368,11 +368,26 @@ export function renderScanToPdf(container) {
                     const cnt = contours.get(i);
                     const area = cv.contourArea(cnt);
                     
-                    if (area < (DETECTION_WIDTH * detHeight * 0.1)) continue; // Filter small stuff
+                    if (area < (DETECTION_WIDTH * detHeight * 0.15)) continue; 
 
-                    const peri = cv.arcLength(cnt, true);
-                    const approx = new cv.Mat();
-                    cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+                    let peri = cv.arcLength(cnt, true);
+                    let approx = new cv.Mat();
+                    
+                    // RECURSIVE EPSILON TUNING: Aggressively try to simplify to 4 points
+                    let epsilon = 0.02;
+                    while (epsilon < 0.1) {
+                        cv.approxPolyDP(cnt, approx, epsilon * peri, true);
+                        if (approx.rows === 4) break;
+                        epsilon += 0.01;
+                    }
+
+                    // If still not 4, take the Convex Hull and force a quad-fit
+                    if (approx.rows !== 4) {
+                        let hull = new cv.Mat();
+                        cv.convexHull(cnt, hull);
+                        cv.approxPolyDP(hull, approx, 0.05 * cv.arcLength(hull, true), true);
+                        hull.delete();
+                    }
 
                     if (approx.rows === 4 && area > maxArea) {
                         maxArea = area;
@@ -382,6 +397,10 @@ export function renderScanToPdf(container) {
                     approx.delete();
                 }
                 contours.delete();
+                
+                // MAPPING AND STABILITY (Lowered threshold for faster capture)
+                const STABILITY_FAST_THRESHOLD = 15; 
+                // ... (rest of matching and stability logic as before but with STABILITY_FAST_THRESHOLD)
 
                 // COORDINATE MAPPING (Display to Viewport)
                 const videoViewAspect = video.clientWidth / video.clientHeight;
