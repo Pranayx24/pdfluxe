@@ -346,20 +346,20 @@ export function renderScanToPdf(container) {
                 cap.read(srcFull);
                 cv.resize(srcFull, srcSmall, new cv.Size(DETECTION_WIDTH, detHeight));
                 
-                // 1. IMPROVED PRE-PROCESSING
+                // 1. ADVANCED PRE-PROCESSING
                 cv.cvtColor(srcSmall, gray, cv.COLOR_RGBA2GRAY);
                 cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
                 
-                // Adaptive thresholding to handle lighting changes, then Canny for edges
-                cv.Canny(blurred, edges, 50, 150);
+                // Aggressive Edge Detection
+                cv.Canny(blurred, edges, 40, 120);
                 
-                // Close gaps in edges using dilation
-                let kernel = cv.Mat.ones(3, 3, cv.CV_8U);
+                // Close gaps using a larger kernel
+                let kernel = cv.Mat.ones(5, 5, cv.CV_8U);
                 cv.dilate(edges, dilated, kernel);
                 kernel.delete();
 
                 const contours = new cv.MatVector();
-                cv.findContours(dilated, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+                cv.findContours(dilated, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
                 
                 let maxArea = -1;
                 let bestPoints = null;
@@ -368,20 +368,21 @@ export function renderScanToPdf(container) {
                     const cnt = contours.get(i);
                     const area = cv.contourArea(cnt);
                     
-                    if (area < (DETECTION_WIDTH * detHeight * 0.15)) continue; 
+                    // Lowered area threshold to 8% for distant scanning
+                    if (area < (DETECTION_WIDTH * detHeight * 0.08)) continue; 
 
                     let peri = cv.arcLength(cnt, true);
                     let approx = new cv.Mat();
                     
-                    // RECURSIVE EPSILON TUNING: Aggressively try to simplify to 4 points
-                    let epsilon = 0.02;
-                    while (epsilon < 0.1) {
-                        cv.approxPolyDP(cnt, approx, epsilon * peri, true);
+                    // RECURSIVE TUNING
+                    let e = 0.01;
+                    while (e < 0.1) {
+                        cv.approxPolyDP(cnt, approx, e * peri, true);
                         if (approx.rows === 4) break;
-                        epsilon += 0.01;
+                        e += 0.01;
                     }
 
-                    // If still not 4, take the Convex Hull and force a quad-fit
+                    // Fallback to Convex Hull
                     if (approx.rows !== 4) {
                         let hull = new cv.Mat();
                         cv.convexHull(cnt, hull);
@@ -398,11 +399,7 @@ export function renderScanToPdf(container) {
                 }
                 contours.delete();
                 
-                // MAPPING AND STABILITY (Lowered threshold for faster capture)
-                const STABILITY_FAST_THRESHOLD = 15; 
-                // ... (rest of matching and stability logic as before but with STABILITY_FAST_THRESHOLD)
-
-                // COORDINATE MAPPING (Display to Viewport)
+                // MAPPING AND STABILITY
                 const videoViewAspect = video.clientWidth / video.clientHeight;
                 const videoSourceAspect = video.videoWidth / video.videoHeight;
                 let scaleFactor = 1, offsetX = 0, offsetY = 0;
@@ -430,11 +427,11 @@ export function renderScanToPdf(container) {
                     const ordered = orderPoints(mappedPts);
                     drawOverlay(ctx, ordered, true, video, overlay);
                     
-                    // AUTO-CAPTURE LOGIC (STABILITY CHECK)
+                    // AUTO-CAPTURE (Stability window)
                     if (autoCaptureEnabled && !isCapturing) {
                         const isStable = lastStablePoints && ordered.every((pt, idx) => {
                             const d = Math.sqrt(Math.pow(pt.x - lastStablePoints[idx].x, 2) + Math.pow(pt.y - lastStablePoints[idx].y, 2));
-                            return d < 15; // Point moved less than 15px
+                            return d < 25; // More forgiving stability
                         });
 
                         if (isStable) stabilityCounter++;
@@ -449,7 +446,7 @@ export function renderScanToPdf(container) {
                     lastStablePoints = ordered;
                     bestPoints.delete();
                 } else {
-                    stabilityCounter = Math.max(0, stabilityCounter - 2);
+                    stabilityCounter = Math.max(0, stabilityCounter - 1);
                     if (lastStablePoints) {
                         drawOverlay(ctx, lastStablePoints, false, video, overlay);
                     }
