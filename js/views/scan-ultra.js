@@ -358,14 +358,19 @@ export function renderScanToPdf(container) {
                 const imageData = frameCtx.getImageData(0, 0, DETECTION_WIDTH, detHeight);
                 srcSmall.data.set(imageData.data);
 
-                // 1. ADVANCED PRE-PROCESSING
+                // 1. INDESTRUCTIBLE PRE-PROCESSING (Adaptive Lighting)
                 cv.cvtColor(srcSmall, gray, cv.COLOR_RGBA2GRAY);
-                cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
                 
-                // Aggressive Edge Detection
-                cv.Canny(blurred, edges, 40, 120);
+                // Adaptive Thresholding handles uneven lighting and shadows
+                const adaptive = new cv.Mat();
+                cv.adaptiveThreshold(gray, adaptive, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
                 
-                // Thickening borders to bridge gaps
+                // Gaussian blur the mask to smooth noise, then Canny for sharp edges
+                cv.GaussianBlur(adaptive, blurred, new cv.Size(5, 5), 0);
+                cv.Canny(blurred, edges, 75, 200);
+                adaptive.delete();
+                
+                // Thickening borders aggressively
                 let kernel = cv.Mat.ones(5, 5, cv.CV_8U);
                 cv.dilate(edges, dilated, kernel);
                 kernel.delete();
@@ -380,17 +385,17 @@ export function renderScanToPdf(container) {
                     const cnt = contours.get(i);
                     const area = cv.contourArea(cnt);
                     
-                    if (area < (DETECTION_WIDTH * detHeight * 0.05)) continue; // Very low 5% threshold
+                    if (area < (DETECTION_WIDTH * detHeight * 0.05)) continue; 
 
                     let peri = cv.arcLength(cnt, true);
                     let approx = new cv.Mat();
                     
-                    // RECURSIVE TUNING
+                    // DYNAMIC EPSILON: More forgiving for uneven document edges
                     let e = 0.01;
                     while (e < 0.1) {
                         cv.approxPolyDP(cnt, approx, e * peri, true);
                         if (approx.rows === 4) break;
-                        if (approx.rows > 4) e += 0.02; else break;
+                        e += 0.01;
                     }
 
                     if (approx.rows === 4 && area > maxArea) {
@@ -402,21 +407,21 @@ export function renderScanToPdf(container) {
                 }
                 contours.delete();
                 
-                // Diagnostics hud
+                // HUD DIAGNOSTICS (Dynamic Feedback)
                 const statusBadge = document.getElementById('auto-scan-status');
                 if (statusBadge) {
                    if (bestPoints) {
-                       statusBadge.innerHTML = '<i class="fa-solid fa-expand"></i> Capturing...';
+                       statusBadge.innerHTML = '<i class="fa-solid fa-lock"></i> DOC LOCKED';
                        statusBadge.style.background = 'var(--gold)';
                        statusBadge.style.color = '#000';
                    } else {
-                       statusBadge.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Searching...';
+                       statusBadge.innerHTML = '<i class="fa-solid fa-camera-viewfinder"></i> FINDING DOCUMENT...';
                        statusBadge.style.background = 'rgba(255,255,255,0.1)';
                        statusBadge.style.color = '#fff';
                    }
                 }
 
-                // MAPPING AND STABILITY (Lowered for v12.0)
+                // COORDINATE MAPPING AND PERSISTENCE
                 const videoViewAspect = video.clientWidth / video.clientHeight;
                 const videoSourceAspect = video.videoWidth / video.videoHeight;
                 let scaleFactor = 1, offsetX = 0, offsetY = 0;
@@ -442,12 +447,21 @@ export function renderScanToPdf(container) {
                     }
                     
                     const ordered = orderPoints(mappedPts);
+                    
+                    // SMOOTHING: Avoid jittery boxes by averaging with last position
+                    if (lastStablePoints) {
+                       ordered.forEach((p, idx) => {
+                          p.x = p.x * 0.4 + lastStablePoints[idx].x * 0.6;
+                          p.y = p.y * 0.4 + lastStablePoints[idx].y * 0.6;
+                       });
+                    }
+
                     drawOverlay(ctx, ordered, true, video, overlay);
                     
                     if (autoCaptureEnabled && !isCapturing) {
                         const isStable = lastStablePoints && ordered.every((pt, idx) => {
-                            const d = Math.sqrt(Math.pow(pt.x - lastStablePoints[idx].x, 2) + Math.pow(pt.y - lastStablePoints[idx].y, 2));
-                            return d < 35; // Very forgiving for handheld stability
+                            const d = Math.hypot(pt.x - lastStablePoints[idx].x, pt.y - lastStablePoints[idx].y);
+                            return d < 40; // Very generous handheld tolerance
                         });
 
                         if (isStable) stabilityCounter++;
