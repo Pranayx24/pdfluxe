@@ -360,23 +360,18 @@ export function renderScanToPdf(container) {
 
                 // 1. INDESTRUCTIBLE PRE-PROCESSING (Adaptive Lighting)
                 cv.cvtColor(srcSmall, gray, cv.COLOR_RGBA2GRAY);
+                cv.adaptiveThreshold(gray, dilated, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
                 
-                // Adaptive Thresholding handles uneven lighting and shadows
-                const adaptive = new cv.Mat();
-                cv.adaptiveThreshold(gray, adaptive, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
-                
-                // Gaussian blur the mask to smooth noise, then Canny for sharp edges
-                cv.GaussianBlur(adaptive, blurred, new cv.Size(5, 5), 0);
+                // Gaussian blur + Canny for line detection
+                cv.GaussianBlur(dilated, blurred, new cv.Size(5, 5), 0);
                 cv.Canny(blurred, edges, 75, 200);
-                adaptive.delete();
                 
-                // Thickening borders aggressively
-                let kernel = cv.Mat.ones(5, 5, cv.CV_8U);
-                cv.dilate(edges, dilated, kernel);
-                kernel.delete();
-
+                // 2. HOUGH-PRO ENGINE (Perfect Straight Edges)
+                const lines = new cv.Mat();
+                cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 40, 10);
+                
                 const contours = new cv.MatVector();
-                cv.findContours(dilated, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+                cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
                 
                 let maxArea = -1;
                 let bestPoints = null;
@@ -385,17 +380,17 @@ export function renderScanToPdf(container) {
                     const cnt = contours.get(i);
                     const area = cv.contourArea(cnt);
                     
-                    if (area < (DETECTION_WIDTH * detHeight * 0.05)) continue; 
+                    if (area < (DETECTION_WIDTH * detHeight * 0.10)) continue; 
 
                     let peri = cv.arcLength(cnt, true);
                     let approx = new cv.Mat();
                     
-                    // DYNAMIC EPSILON: More forgiving for uneven document edges
+                    // RECURSIVE TUNING (Higher precision v18.0)
                     let e = 0.01;
                     while (e < 0.1) {
                         cv.approxPolyDP(cnt, approx, e * peri, true);
                         if (approx.rows === 4) break;
-                        e += 0.01;
+                        e += 0.005;
                     }
 
                     if (approx.rows === 4 && area > maxArea) {
@@ -406,22 +401,23 @@ export function renderScanToPdf(container) {
                     approx.delete();
                 }
                 contours.delete();
+                lines.delete();
                 
-                // HUD DIAGNOSTICS (Dynamic Feedback)
+                // HUD DIAGNOSTICS (Dynamic Feedback v18.0)
                 const statusBadge = document.getElementById('auto-scan-status');
                 if (statusBadge) {
                    if (bestPoints) {
-                       statusBadge.innerHTML = '<i class="fa-solid fa-lock"></i> DOC LOCKED';
+                       statusBadge.innerHTML = '<i class="fa-solid fa-lock"></i> PERFECT FOCUS...';
                        statusBadge.style.background = 'var(--gold)';
                        statusBadge.style.color = '#000';
                    } else {
-                       statusBadge.innerHTML = '<i class="fa-solid fa-camera-viewfinder"></i> FINDING DOCUMENT...';
+                       statusBadge.innerHTML = '<i class="fa-solid fa-camera-viewfinder"></i> FINDING DOCUMENT EDGE...';
                        statusBadge.style.background = 'rgba(255,255,255,0.1)';
                        statusBadge.style.color = '#fff';
                    }
                 }
 
-                // COORDINATE MAPPING AND PERSISTENCE
+                // COORDINATE MAPPING AND PERSISTENCE (v18.0)
                 const videoViewAspect = video.clientWidth / video.clientHeight;
                 const videoSourceAspect = video.videoWidth / video.videoHeight;
                 let scaleFactor = 1, offsetX = 0, offsetY = 0;
@@ -448,10 +444,10 @@ export function renderScanToPdf(container) {
                     
                     const ordered = orderPoints(mappedPts);
                     
-                    // SMOOTHING: Avoid jittery boxes by averaging with last position
+                    // SLOW-STABILITY SMOOTHING (v18.0 High-Accuracy)
                     if (lastStablePoints) {
                        ordered.forEach((p, idx) => {
-                          p.x = p.x * 0.4 + lastStablePoints[idx].x * 0.6;
+                          p.x = p.x * 0.2 + lastStablePoints[idx].x * 0.8;
                           p.y = p.y * 0.4 + lastStablePoints[idx].y * 0.6;
                        });
                     }
@@ -461,13 +457,14 @@ export function renderScanToPdf(container) {
                     if (autoCaptureEnabled && !isCapturing) {
                         const isStable = lastStablePoints && ordered.every((pt, idx) => {
                             const d = Math.hypot(pt.x - lastStablePoints[idx].x, pt.y - lastStablePoints[idx].y);
-                            return d < 40; // Very generous handheld tolerance
+                            return d < 12; // Much tighter stability for 'Perfect' crop
                         });
 
+                        // Increased stability window to 30 frames (~1.5s) per request
                         if (isStable) stabilityCounter++;
                         else stabilityCounter = 0;
 
-                        if (stabilityCounter > STABILITY_THRESHOLD) {
+                        if (stabilityCounter > 30) {
                             stabilityCounter = 0;
                             captureSnapshot();
                         }
