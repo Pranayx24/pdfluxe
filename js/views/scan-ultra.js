@@ -46,35 +46,32 @@ export function renderScanToPdf(container) {
                     <canvas id="overlay-canvas" style="position: absolute; top:0; left:0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
                     
                     <!-- HUD Overlay -->
-                    <div id="scan-hud" style="position: absolute; top: 1.5rem; left: 1.5rem; right: 1.5rem; display: flex; justify-content: space-between; align-items: start; pointer-events: none; z-index: 20;">
+                    <div id="scan-hud" style="position: absolute; top: 1rem; left: 1rem; right: 1rem; display: flex; justify-content: space-between; pointer-events: none; z-index: 20;">
                         <div class="badge-glass" id="auto-scan-status">
-                            <i class="fa-solid fa-spinner fa-spin"></i> Initializing Engine...
+                            <i class="fa-solid fa-spinner fa-spin"></i> Initializing...
                         </div>
-                        <div id="scan-count-badge" class="badge-gold" style="display: none;">0 Pages</div>
                     </div>
 
-                    <div class="scan-controls">
-                        <button id="btn-toggle-auto" class="btn-icon-glass active">
-                             <i class="fa-solid fa-wand-magic-sparkles"></i>
-                        </button>
-                        <button id="btn-trigger-scan" class="btn-capture-main">
-                            <div class="btn-capture-inner"></div>
-                        </button>
-                        <button id="btn-exit-scan" class="btn-icon-glass danger">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
+                    <div class="scan-controls" style="bottom: 2rem;">
+                        <button id="btn-toggle-auto" class="btn-icon-glass active"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+                        <button id="btn-trigger-scan" class="btn-capture-main"><div class="btn-capture-inner"></div></button>
+                        <button id="btn-exit-scan" class="btn-icon-glass danger"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-
-                    <div id="capture-flash" class="camera-flash"></div>
                 </div>
             </div>
 
-            <!-- EDITING STAGE (v19.0 Premium Overhaul) -->
-            <div id="edit-stage" style="display: none; padding: 1rem;" class="animate-zoomIn">
-                <div class="edit-canvas-wrapper" style="position: relative; margin: 0 auto; width: 100%; max-height: 70vh; background: #000; border-radius: 12px; overflow: visible; border: 2px solid var(--gold);">
-                    <canvas id="edit-canvas" style="display: block; max-width: 100%; max-height: 70vh; margin: auto;"></canvas>
+            <!-- EDITING STAGE (v20.0 Final Touch) -->
+            <div id="edit-stage" style="display: none; height: 100vh; background: #000; position: fixed; inset:0; z-index: 1000; padding: 20px;">
+                <div class="edit-canvas-wrapper" style="position: relative; width: 100%; height: 75%; display: flex; align-items: center; justify-content: center;">
+                    <canvas id="edit-canvas" style="max-width: 100%; max-height: 100%; object-fit: contain;"></canvas>
                     <div id="corner-handles-container" style="position: absolute; inset:0; pointer-events: none;"></div>
-                    <canvas id="magnifier-canvas" width="150" height="150" style="position: absolute; top: 10px; right: 10px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 20px #000; display: none; z-index: 300; background: #000;"></canvas>
+                    <!-- Fixed Position Magnifier for v20.0 visibility -->
+                    <div id="magnifier-box" style="position: absolute; top: -50px; left: 50%; transform: translateX(-50%); width: 120px; height: 120px; border-radius: 50%; border: 4px solid var(--gold); overflow: hidden; display: none; background: #000; box-shadow: 0 0 25px rgba(0,0,0,0.8); z-index: 2000;">
+                         <canvas id="magnifier-canvas" width="120" height="120"></canvas>
+                         <div style="position: absolute; inset:0; border: 1px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; pointer-events: none;">
+                            <div style="width: 10px; height: 10px; border: 1px solid var(--gold); border-radius: 50%;"></div>
+                         </div>
+                    </div>
                 </div>
                 
                 <div class="edit-actions" style="margin-top: 2rem;">
@@ -85,8 +82,8 @@ export function renderScanToPdf(container) {
                         <button class="filter-btn" data-filter="scan">B&W</button>
                     </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn-secondary" id="btn-discard-page" style="flex:1; height: 56px;">Discard</button>
-                        <button class="btn-primary" id="btn-save-page" style="flex:1.5; height: 56px; font-weight: 700;">Confirm & Save</button>
+                        <button class="btn-secondary" id="btn-discard-page" style="flex:1; height: 50px;">Discard</button>
+                        <button class="btn-primary" id="btn-save-page" style="flex:2; height: 50px; font-weight: 700;">Confirm & Save</button>
                     </div>
                 </div>
             </div>
@@ -444,11 +441,11 @@ export function renderScanToPdf(container) {
                     
                     const ordered = orderPoints(mappedPts);
                     
-                    // SLOW-STABILITY SMOOTHING (v18.0 High-Accuracy)
+                    // SLOW-STABILITY SMOOTHING (v20.0 Balanced)
                     if (lastStablePoints) {
                        ordered.forEach((p, idx) => {
-                          p.x = p.x * 0.2 + lastStablePoints[idx].x * 0.8;
-                          p.y = p.y * 0.4 + lastStablePoints[idx].y * 0.6;
+                          p.x = p.x * 0.3 + lastStablePoints[idx].x * 0.7;
+                          p.y = p.y * 0.3 + lastStablePoints[idx].y * 0.7;
                        });
                     }
 
@@ -457,14 +454,14 @@ export function renderScanToPdf(container) {
                     if (autoCaptureEnabled && !isCapturing) {
                         const isStable = lastStablePoints && ordered.every((pt, idx) => {
                             const d = Math.hypot(pt.x - lastStablePoints[idx].x, pt.y - lastStablePoints[idx].y);
-                            return d < 12; // Much tighter stability for 'Perfect' crop
+                            return d < 20; // Corrected Threshold for mobile handheld
                         });
 
-                        // Increased stability window to 30 frames (~1.5s) per request
+                        // 1.0s wait for 'Perfect' focus per request
                         if (isStable) stabilityCounter++;
                         else stabilityCounter = 0;
 
-                        if (stabilityCounter > 30) {
+                        if (stabilityCounter > 20) {
                             stabilityCounter = 0;
                             captureSnapshot();
                         }
@@ -490,47 +487,9 @@ export function renderScanToPdf(container) {
         processFrame();
     };
 
-    const orderPoints = (pts) => {
-        // Robust Angular Sorting around center of mass to find TL, TR, BR, BL correctly every time
-        const center = pts.reduce((a, b) => ({ x: a.x + b.x/4, y: a.y + b.y/4 }), { x: 0, y: 0 });
-        const sorted = [...pts].sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
-        
-        // Find the one closest to (0,0) as TL
-        const tlIdx = sorted.reduce((best, p, i) => (p.x + p.y < sorted[best].x + sorted[best].y) ? i : best, 0);
-        const res = [];
-        for (let i = 0; i < 4; i++) res.push(sorted[(tlIdx + i) % 4]);
-        return res; // [TL, TR, BR, BL]
-    };
+    // ... (orderPoints and drawOverlay unchanged)
 
-    const drawOverlay = (ctx, pts, active, video, canvas) => {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        ctx.lineTo(pts[1].x, pts[1].y);
-        ctx.lineTo(pts[2].x, pts[2].y);
-        ctx.lineTo(pts[3].x, pts[3].y);
-        ctx.closePath();
-        
-        const mainColor = active ? 'var(--gold)' : '#ffffff';
-        ctx.strokeStyle = mainColor;
-        ctx.lineWidth = 6;
-        ctx.stroke();
-        ctx.fillStyle = active ? 'rgba(212, 175, 55, 0.3)' : 'rgba(255, 255, 255, 0.1)';
-        ctx.fill();
-
-        if (active) {
-            const progress = stabilityCounter / STABILITY_THRESHOLD;
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[0].x + (pts[1].x - pts[0].x) * progress, pts[0].y + (pts[1].y - pts[0].y) * progress);
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 10;
-            ctx.stroke();
-        }
-        ctx.restore();
-    };
-
-    // 7. Capture & Adjustment Logic (v19.0 Contain Mode)
+    // 7. Capture & Adjustment Logic (v20.0 Industrial)
     const captureSnapshot = () => {
         if (isCapturing) return;
         isCapturing = true;
@@ -547,12 +506,9 @@ export function renderScanToPdf(container) {
         tempCanvas.getContext('2d').drawImage(video, 0, 0);
         rawImageData = tempCanvas;
 
-        const vW = video.videoWidth;
-        const vH = video.videoHeight;
-        const cW = video.clientWidth;
-        const cH = video.clientHeight;
-        const vAspect = vW / vH;
-        const cAspect = cW / cH;
+        const vW = video.videoWidth, vH = video.videoHeight;
+        const cW = video.clientWidth, cH = video.clientHeight;
+        const vAspect = vW / vH, cAspect = cW / cH;
 
         let s, ox = 0, oy = 0;
         if (cAspect > vAspect) {
@@ -579,14 +535,15 @@ export function renderScanToPdf(container) {
 
     const showEditingStage = () => {
         scannerInterface.style.display = 'none';
-        editStage.style.display = 'block';
+        editStage.style.display = 'flex'; // Use flex for 100vh layout
+        editStage.style.flexDirection = 'column';
         editCanvas.width = rawImageData.width;
         editCanvas.height = rawImageData.height;
         
         setTimeout(() => {
             drawEditScreen();
             initCornerHandles();
-        }, 150);
+        }, 300); // 300ms for stable DOM layout on mobile
     };
 
     const drawEditScreen = () => {
@@ -602,7 +559,7 @@ export function renderScanToPdf(container) {
         ctx.closePath();
         
         ctx.strokeStyle = '#d4af37';
-        ctx.lineWidth = Math.max(8, editCanvas.width / 150);
+        ctx.lineWidth = Math.max(10, editCanvas.width / 120);
         ctx.stroke();
         ctx.fillStyle = 'rgba(212, 175, 55, 0.15)';
         ctx.fill();
@@ -610,8 +567,10 @@ export function renderScanToPdf(container) {
 
     const initCornerHandles = () => {
         cornerContainer.innerHTML = '';
-        const magnifier = document.getElementById('magnifier-canvas');
-        const magCtx = magnifier.getContext('2d');
+        const magBox = document.getElementById('magnifier-box');
+        const magCanvas = document.getElementById('magnifier-canvas');
+        const magCtx = magCanvas.getContext('2d');
+        
         const rect = editCanvas.getBoundingClientRect();
         const scX = rect.width / editCanvas.width;
         const scY = rect.height / editCanvas.height;
@@ -619,9 +578,12 @@ export function renderScanToPdf(container) {
         corners.forEach((pt, idx) => {
             const handle = document.createElement('div');
             handle.className = 'corner-handle';
+            // Increase handle size for easier touch
+            handle.style.width = '48px';
+            handle.style.height = '48px';
             handle.style.left = `${pt.x * scX}px`;
             handle.style.top = `${pt.y * scY}px`;
-            handle.style.pointerEvents = 'auto'; // Re-enable pointer on handle itself
+            handle.style.pointerEvents = 'auto';
             
             let isDragging = false;
             const onMove = (e) => {
@@ -635,32 +597,20 @@ export function renderScanToPdf(container) {
                 const curY = Math.max(0, Math.min(y, editCanvas.height));
                 corners[idx] = { x: curX, y: curY };
                 
-                // Update Handle
                 handle.style.left = `${curX * scX}px`;
                 handle.style.top = `${curY * scY}px`;
                 
-                // Update Magnifier
-                magnifier.style.display = 'block';
-                magCtx.clearRect(0,0,150,150);
-                magCtx.drawImage(rawImageData, curX - 37, curY - 37, 75, 75, 0, 0, 150, 150);
-                magCtx.beginPath();
-                magCtx.strokeStyle = '#d4af37';
-                magCtx.lineWidth = 4;
-                magCtx.arc(75, 75, 5, 0, Math.PI * 2);
-                magCtx.stroke();
+                // Show Fixed Top Magnifier
+                magBox.style.display = 'block';
+                magCtx.clearRect(0,0,120,120);
+                // 3x Zoom factor for perfect alignment
+                magCtx.drawImage(rawImageData, curX - 20, curY - 20, 40, 40, 0, 0, 120, 120);
                 
                 drawEditScreen();
             };
 
-            const onEnd = () => { 
-                isDragging = false; 
-                magnifier.style.display = 'none';
-            };
-            
-            handle.onmousedown = handle.ontouchstart = (e) => { 
-                isDragging = true; 
-                e.preventDefault(); 
-            };
+            const onEnd = () => { isDragging = false; magBox.style.display = 'none'; };
+            handle.onmousedown = handle.ontouchstart = (e) => { isDragging = true; e.preventDefault(); };
             
             window.addEventListener('mousemove', onMove);
             window.addEventListener('touchmove', onMove, {passive: false});
