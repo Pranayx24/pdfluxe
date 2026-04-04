@@ -399,6 +399,9 @@ export function renderScanToPdf(container) {
                 ctx.clearRect(0, 0, overlay.width, overlay.height);
 
                 if (bestPoints) {
+                    const ctx = overlay.getContext('2d');
+                    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
                     const pts = [];
                     for (let i = 0; i < 4; i++) {
                         pts.push({ 
@@ -420,7 +423,9 @@ export function renderScanToPdf(container) {
                     }
                     bestPoints.delete();
                 } else {
-                    stabilityCounter = Math.max(0, stabilityCounter - 1);
+                    const ctx = overlay.getContext('2d');
+                    ctx.clearRect(0, 0, overlay.width, overlay.height);
+                    stabilityCounter = Math.max(0, stabilityCounter - 2);
                     if (lastStablePoints) {
                         drawOverlay(ctx, lastStablePoints, false);
                     }
@@ -441,13 +446,14 @@ export function renderScanToPdf(container) {
     };
 
     const orderPoints = (pts) => {
-        const sum = pts.map(p => p.x + p.y);
-        const diff = pts.map(p => p.y - p.x);
-        
-        const tl = pts[sum.indexOf(Math.min(...sum))];
-        const br = pts[sum.indexOf(Math.max(...sum))];
-        const tr = pts[diff.indexOf(Math.min(...diff))];
-        const bl = pts[diff.indexOf(Math.max(...diff))];
+        // Robust sort using center of mass to avoid issues with portrait aspect ratios
+        const centerX = pts.reduce((a, b) => a + b.x, 0) / 4;
+        const centerY = pts.reduce((a, b) => a + b.y, 0) / 4;
+
+        const tl = pts.find(p => p.x < centerX && p.y < centerY) || pts[0];
+        const tr = pts.find(p => p.x >= centerX && p.y < centerY) || pts[1];
+        const br = pts.find(p => p.x >= centerX && p.y >= centerY) || pts[2];
+        const bl = pts.find(p => p.x < centerX && p.y >= centerY) || pts[3];
         
         return [tl, tr, br, bl];
     };
