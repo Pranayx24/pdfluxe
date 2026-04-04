@@ -494,11 +494,15 @@ export function renderScanToPdf(container) {
     };
 
     const orderPoints = (pts) => {
-        // Sort based on geometric position
-        const sorted = [...pts].sort((a, b) => a.y - b.y);
-        const top = sorted.slice(0, 2).sort((a, b) => a.x - b.x);
-        const bottom = sorted.slice(2, 4).sort((a, b) => a.x - b.x);
-        return [top[0], top[1], bottom[1], bottom[0]]; // TL, TR, BR, BL
+        // Robust Angular Sorting around center of mass to find TL, TR, BR, BL correctly every time
+        const center = pts.reduce((a, b) => ({ x: a.x + b.x/4, y: a.y + b.y/4 }), { x: 0, y: 0 });
+        const sorted = [...pts].sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
+        
+        // Find the one closest to (0,0) as TL
+        const tlIdx = sorted.reduce((best, p, i) => (p.x + p.y < sorted[best].x + sorted[best].y) ? i : best, 0);
+        const res = [];
+        for (let i = 0; i < 4; i++) res.push(sorted[(tlIdx + i) % 4]);
+        return res; // [TL, TR, BR, BL]
     };
 
     const drawOverlay = (ctx, pts, active, video, canvas) => {
@@ -510,18 +514,14 @@ export function renderScanToPdf(container) {
         ctx.lineTo(pts[3].x, pts[3].y);
         ctx.closePath();
         
-        const mainColor = active ? '#d4af37' : '#ffffff';
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = mainColor;
+        const mainColor = active ? 'var(--gold)' : '#ffffff';
         ctx.strokeStyle = mainColor;
         ctx.lineWidth = 6;
         ctx.stroke();
-
         ctx.fillStyle = active ? 'rgba(212, 175, 55, 0.3)' : 'rgba(255, 255, 255, 0.1)';
         ctx.fill();
 
         if (active) {
-            // Visual stability progress bar
             const progress = stabilityCounter / STABILITY_THRESHOLD;
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
@@ -544,19 +544,18 @@ export function renderScanToPdf(container) {
             setTimeout(() => flash.classList.remove('active'), 400);
         }
  
-        // Capture high-res frame
+        // Capture raw high-res frame
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = video.videoWidth;
         tempCanvas.height = video.videoHeight;
         tempCanvas.getContext('2d').drawImage(video, 0, 0);
         rawImageData = tempCanvas;
 
+        // Accurate Mobile Mapping
         const vW = video.videoWidth;
         const vH = video.videoHeight;
         const cW = video.clientWidth;
         const cH = video.clientHeight;
-
-        // ACCURATE COORDINATE REVERSE-MAPPING
         const vAspect = vW / vH;
         const cAspect = cW / cH;
         let s, ox = 0, oy = 0;
@@ -589,11 +588,10 @@ export function renderScanToPdf(container) {
         editCanvas.width = rawImageData.width;
         editCanvas.height = rawImageData.height;
         
-        // Ensure handle container matches canvas display size
         setTimeout(() => {
             drawEditScreen();
             initCornerHandles();
-        }, 100);
+        }, 120);
     };
 
     const drawEditScreen = () => {
@@ -609,9 +607,9 @@ export function renderScanToPdf(container) {
         ctx.closePath();
         
         ctx.strokeStyle = '#d4af37';
-        ctx.lineWidth = Math.max(10, editCanvas.width / 100);
+        ctx.lineWidth = Math.max(8, editCanvas.width / 120);
         ctx.stroke();
-        ctx.fillStyle = 'rgba(212, 175, 55, 0.2)';
+        ctx.fillStyle = 'rgba(212, 175, 55, 0.15)';
         ctx.fill();
     };
 
@@ -628,28 +626,20 @@ export function renderScanToPdf(container) {
             handle.style.top = `${pt.y * scaleY}px`;
             
             let isDragging = false;
-            
             const onMove = (e) => {
                 if (!isDragging) return;
                 const canvasRect = editCanvas.getBoundingClientRect();
                 const touch = e.touches ? e.touches[0] : e;
                 const x = (touch.clientX - canvasRect.left) / scaleX;
                 const y = (touch.clientY - canvasRect.top) / scaleY;
-                
-                corners[idx] = { 
-                    x: Math.max(0, Math.min(x, editCanvas.width)), 
-                    y: Math.max(0, Math.min(y, editCanvas.height)) 
-                };
-                
+                corners[idx] = { x: Math.max(0, Math.min(x, editCanvas.width)), y: Math.max(0, Math.min(y, editCanvas.height)) };
                 handle.style.left = `${corners[idx].x * scaleX}px`;
                 handle.style.top = `${corners[idx].y * scaleY}px`;
                 drawEditScreen();
             };
 
             const onEnd = () => isDragging = false;
-            handle.onmousedown = (e) => { isDragging = true; e.preventDefault(); };
-            handle.ontouchstart = (e) => { isDragging = true; e.preventDefault(); };
-            
+            handle.onmousedown = handle.ontouchstart = (e) => { isDragging = true; e.preventDefault(); };
             window.addEventListener('mousemove', onMove);
             window.addEventListener('touchmove', onMove, {passive: false});
             window.addEventListener('mouseup', onEnd);
@@ -661,49 +651,33 @@ export function renderScanToPdf(container) {
     // 8. Final Image Generation (Warp + Filter)
     const finalizePage = async () => {
         const cv = window.cv;
-        if (!cv) return;
+        if (!cv || processing) return;
+        processing = true;
 
         const src = cv.imread(rawImageData);
         const dst = new cv.Mat();
         
-        // Perspective Mapping
-        const widthA = Math.hypot(corners[2].x - corners[3].x, corners[2].y - corners[3].y);
-        const widthB = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
-        const maxWidth = Math.max(widthA, widthB);
+        // Professional 2% Inset: Shrink crop box slightly to remove background artifacts
+        const inset = (pts) => {
+            const c = pts.reduce((a, b) => ({ x: a.x + b.x/4, y: a.y + b.y/4 }), { x: 0, y: 0 });
+            return pts.map(p => ({ x: p.x * 0.98 + c.x * 0.02, y: p.y * 0.98 + c.y * 0.02 }));
+        };
+        const active = inset(corners);
 
-        const heightA = Math.hypot(corners[1].x - corners[2].x, corners[1].y - corners[2].y);
-        const heightB = Math.hypot(corners[0].x - corners[3].x, corners[0].y - corners[3].y);
-        const maxHeight = Math.max(heightA, heightB);
+        const finalW = Math.max(Math.hypot(active[2].x-active[3].x, active[2].y-active[3].y), Math.hypot(active[1].x-active[0].x, active[1].y-active[0].y));
+        const finalH = Math.max(Math.hypot(active[1].x-active[2].x, active[1].y-active[2].y), Math.hypot(active[0].x-active[3].x, active[0].y-active[3].y));
 
-        // Cap resolution for memory stability while keeping print quality
-        const SCAN_LIMIT = 2200;
-        let finalW = maxWidth, finalH = maxHeight;
-        if (maxWidth > SCAN_LIMIT || maxHeight > SCAN_LIMIT) {
-             const factor = SCAN_LIMIT / Math.max(maxWidth, maxHeight);
-             finalW = maxWidth * factor;
-             finalH = maxHeight * factor;
-        }
-
-        const srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
-            corners[0].x, corners[0].y,
-            corners[1].x, corners[1].y,
-            corners[2].x, corners[2].y,
-            corners[3].x, corners[3].y
-        ]);
-        
-        const dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
-            0, 0, finalW, 0, finalW, finalH, 0, finalH
-        ]);
+        const srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [active[0].x, active[0].y, active[1].x, active[1].y, active[2].x, active[2].y, active[3].x, active[3].y]);
+        const dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, finalW, 0, finalW, finalH, 0, finalH]);
         
         const M = cv.getPerspectiveTransform(srcCoords, dstCoords);
-        cv.warpPerspective(src, dst, M, new cv.Size(finalW, finalH), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+        cv.warpPerspective(src, dst, M, new cv.Size(finalW, finalH), cv.INTER_CUBIC);
         
-        // ENHANCED FILTERS (v14.0 High-Legibility)
+        // Final Filters
         if (selectedFilter === 'magic') {
-            // Adaptive Contrast Stretching
             cv.cvtColor(dst, dst, cv.COLOR_RGBA2RGB); 
             let out = new cv.Mat();
-            cv.normalize(dst, out, 0, 255, cv.NORM_MINMAX, cv.CV_8UC3);
+            cv.normalize(dst, out, 0, 255, cv.NORM_MINMAX);
             out.copyTo(dst);
             out.delete();
         } else if (selectedFilter === 'grayscale') {
@@ -718,6 +692,7 @@ export function renderScanToPdf(container) {
         capturedPages.push(outCanvas.toDataURL('image/jpeg', 0.92));
         
         src.delete(); dst.delete(); srcCoords.delete(); dstCoords.delete(); M.delete();
+        processing = false;
         showGallery();
     };
 
