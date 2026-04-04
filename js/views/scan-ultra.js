@@ -1,7 +1,7 @@
 import { getPDFLib } from '../pdf-engine.js';
 
 /**
- * Scan to PDF View - Adobe Scan Replica v22.0
+ * Scan to PDF View - Adobe Scan Replica v22.1 
  * Implements Blue Glow detection, Centered HUD, and Floating Multi-page Gallery.
  */
 export function renderScanToPdf(container) {
