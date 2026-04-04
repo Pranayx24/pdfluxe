@@ -163,27 +163,34 @@ export function renderScanToPdf(container) {
     let rawImageData = null;
     let selectedFilter = 'original';
 
-    // 4. Utility: Wait for OpenCV to be ready
+    // 4. Utility: Wait for OpenCV to be ready with Graceful Degradation
+    let cvLoaded = false;
     const ensureCV = () => {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             if (window.cv && window.cv.Mat) {
-                resolve(window.cv);
+                cvLoaded = true;
+                resolve(true);
                 return;
             }
             
-            // Timeout after 15 seconds
+            console.log("Waiting for OpenCV...");
+            
+            // Timeout after 10 seconds - if it fails, we fall back to "Basic Mode"
             const timeout = setTimeout(() => {
                 clearInterval(interval);
-                reject(new Error("Computer Vision engine taking too long to load. Please check your connection."));
-            }, 15000);
+                console.warn("OpenCV load timed out. Falling back to Basic Mode.");
+                window.showToast("Slow connection: Document detection disabled. Manual capture only.", "warning");
+                resolve(false); // Not loaded, but continue
+            }, 10000);
 
             const interval = setInterval(() => {
                 if (window.cv && window.cv.Mat) {
                     clearInterval(interval);
                     clearTimeout(timeout);
-                    resolve(window.cv);
+                    cvLoaded = true;
+                    resolve(true);
                 }
-            }, 100);
+            }, 200);
         });
     };
 
@@ -194,16 +201,24 @@ export function renderScanToPdf(container) {
         btnInit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Initializing...';
 
         try {
-            await ensureCV();
+            console.log("Starting scanner initialization...");
+            const isCVReady = await ensureCV();
+            
             btnInit.innerHTML = '<i class="fa-solid fa-camera"></i> Starting Camera...';
             
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
-            });
+            const constraints = {
+                video: { 
+                    facingMode: facingMode, 
+                    width: { ideal: 1280 }, // Lowering ideal slightly for better compatibility
+                    height: { ideal: 720 } 
+                }
+            };
+
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = stream;
             
-            // Wait for video to be ready before showing interface
             video.onloadedmetadata = () => {
+                console.log("Video metadata loaded.");
                 placeholder.style.display = 'none';
                 scannerInterface.style.display = 'block';
                 galleryStage.style.display = 'none';
@@ -211,11 +226,31 @@ export function renderScanToPdf(container) {
                 
                 overlay.width = video.videoWidth;
                 overlay.height = video.videoHeight;
-                startDetectionLoop();
+                
+                if (isCVReady) {
+                    console.log("Starting detection loop.");
+                    startDetectionLoop();
+                } else {
+                    console.log("Starting basic mode (No CV).");
+                    autoCaptureOption.style.display = 'none';
+                    window.showToast("Basic Mode: Capture manually.", "info");
+                }
             };
+            
+            // Fallback for some browsers where onloadedmetadata is erratic
+            video.onloadeddata = () => {
+                if (scannerInterface.style.display === 'none') {
+                    video.onloadedmetadata();
+                }
+            };
+
         } catch (err) {
-            console.error(err);
-            window.showToast(err.message || "Camera access denied or unsupported.", "error");
+            console.error("Scanner Error:", err);
+            let msg = "Camera access denied.";
+            if (err.name === "NotAllowedError") msg = "Please allow camera access to use the scanner.";
+            if (err.name === "NotFoundError") msg = "No camera found on this device.";
+            
+            window.showToast(msg, "error");
             btnInit.disabled = false;
             btnInit.innerHTML = originalBtnText;
         }
@@ -371,12 +406,11 @@ export function renderScanToPdf(container) {
         isCapturing = true;
         
         const flash = document.getElementById('capture-flash');
-        flash.classList.add('active');
-        setTimeout(() => flash.classList.remove('active'), 400);
-
-        // Keep current corners as default Edit points
-        corners = lastStablePoints ? JSON.parse(JSON.stringify(lastStablePoints)) : null;
-        
+        if (flash) {
+            flash.classList.add('active');
+            setTimeout(() => flash.classList.remove('active'), 400);
+        }
+ 
         // Capture high-res frame
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = video.videoWidth;
@@ -384,15 +418,30 @@ export function renderScanToPdf(container) {
         tempCanvas.getContext('2d').drawImage(video, 0, 0);
         rawImageData = tempCanvas;
 
-        // Default corners if none detected
-        if (!corners) {
-            const w = video.videoWidth, h = video.videoHeight;
-            const m = 100;
-            corners = [ {x:m,y:m}, {x:w-m,y:m}, {x:w-m,y:h-m}, {x:m,y:h-m} ];
-        }
-
         stopScanner();
-        showEditingStage();
+
+        // Check if OpenCV is ready for advanced processing
+        if (cvLoaded) {
+            // Keep current corners as default Edit points
+            corners = lastStablePoints ? JSON.parse(JSON.stringify(lastStablePoints)) : null;
+            
+            // Default corners if none detected
+            if (!corners) {
+                const w = video.videoWidth, h = video.videoHeight;
+                const m = 100;
+                corners = [ {x:m,y:m}, {x:w-m,y:m}, {x:w-m,y:h-m}, {x:m,y:h-m} ];
+            }
+            showEditingStage();
+        } else {
+            // Fallback: Skip editing/warping and add directly to gallery
+            console.log("Adding image directly (Basic Mode)");
+            const finalImage = rawImageData.toDataURL('image/jpeg', 0.9);
+            scannedPages.push(finalImage);
+            updateGallery();
+            showGallery();
+            window.showToast("Page added to document.", "success");
+        }
+        
         isCapturing = false;
     };
 
