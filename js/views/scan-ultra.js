@@ -42,7 +42,7 @@ export function renderScanToPdf(container) {
                 </div>
 
                 <div id="scanner-interface" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 20px;">
-                    <video id="scan-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+                    <video id="scan-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain; background: #000;"></video>
                     <canvas id="overlay-canvas" style="position: absolute; top:0; left:0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
                     
                     <!-- HUD Overlay -->
@@ -53,10 +53,9 @@ export function renderScanToPdf(container) {
                         <div id="scan-count-badge" class="badge-gold" style="display: none;">0 Pages</div>
                     </div>
 
-                    <!-- Scan Controls -->
                     <div class="scan-controls">
-                        <button id="btn-toggle-auto" class="btn-icon-glass" title="Toggle Auto-Scan">
-                             <i class="fa-solid fa-bolt"></i>
+                        <button id="btn-toggle-auto" class="btn-icon-glass active">
+                             <i class="fa-solid fa-wand-magic-sparkles"></i>
                         </button>
                         <button id="btn-trigger-scan" class="btn-capture-main">
                             <div class="btn-capture-inner"></div>
@@ -70,23 +69,24 @@ export function renderScanToPdf(container) {
                 </div>
             </div>
 
-            <!-- EDITING STAGE (Shown after capture) -->
-            <div id="edit-stage" style="display: none;" class="animate-zoomIn">
-                <div class="edit-canvas-wrapper" style="position: relative; margin: 0 auto; max-width: 100%; overflow: hidden; border-radius: 12px; border: 2px solid var(--gold);">
-                    <canvas id="edit-canvas" style="display: block; max-width: 100%;"></canvas>
-                    <div id="corner-handles-container"></div>
+            <!-- EDITING STAGE (v19.0 Premium Overhaul) -->
+            <div id="edit-stage" style="display: none; padding: 1rem;" class="animate-zoomIn">
+                <div class="edit-canvas-wrapper" style="position: relative; margin: 0 auto; width: 100%; max-height: 70vh; background: #000; border-radius: 12px; overflow: visible; border: 2px solid var(--gold);">
+                    <canvas id="edit-canvas" style="display: block; max-width: 100%; max-height: 70vh; margin: auto;"></canvas>
+                    <div id="corner-handles-container" style="position: absolute; inset:0; pointer-events: none;"></div>
+                    <canvas id="magnifier-canvas" width="150" height="150" style="position: absolute; top: 10px; right: 10px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 20px #000; display: none; z-index: 300; background: #000;"></canvas>
                 </div>
                 
-                <div class="edit-actions" style="margin-top: 1.5rem;">
-                    <div class="filter-bar" style="display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 2rem;">
+                <div class="edit-actions" style="margin-top: 2rem;">
+                    <div class="filter-bar" style="display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 2rem; flex-wrap: wrap;">
                         <button class="filter-btn active" data-filter="original">Original</button>
                         <button class="filter-btn" data-filter="magic">Magic</button>
                         <button class="filter-btn" data-filter="grayscale">Grayscale</button>
                         <button class="filter-btn" data-filter="scan">B&W</button>
                     </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn-secondary" id="btn-discard-page" style="flex:1;">Discard</button>
-                        <button class="btn-primary" id="btn-save-page" style="flex:1;">Confirm Page</button>
+                        <button class="btn-secondary" id="btn-discard-page" style="flex:1; height: 56px;">Discard</button>
+                        <button class="btn-primary" id="btn-save-page" style="flex:1.5; height: 56px; font-weight: 700;">Confirm & Save</button>
                     </div>
                 </div>
             </div>
@@ -530,7 +530,7 @@ export function renderScanToPdf(container) {
         ctx.restore();
     };
 
-    // 7. Capture & Adjustment Logic
+    // 7. Capture & Adjustment Logic (v19.0 Contain Mode)
     const captureSnapshot = () => {
         if (isCapturing) return;
         isCapturing = true;
@@ -541,34 +541,32 @@ export function renderScanToPdf(container) {
             setTimeout(() => flash.classList.remove('active'), 400);
         }
  
-        // Capture raw high-res frame
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = video.videoWidth;
         tempCanvas.height = video.videoHeight;
         tempCanvas.getContext('2d').drawImage(video, 0, 0);
         rawImageData = tempCanvas;
 
-        // Accurate Mobile Mapping
         const vW = video.videoWidth;
         const vH = video.videoHeight;
         const cW = video.clientWidth;
         const cH = video.clientHeight;
         const vAspect = vW / vH;
         const cAspect = cW / cH;
-        let s, ox = 0, oy = 0;
 
+        let s, ox = 0, oy = 0;
         if (cAspect > vAspect) {
-            s = cW / vW;
-            oy = (vH * s - cH) / 2;
-        } else {
             s = cH / vH;
-            ox = (vW * s - cW) / 2;
+            ox = (cW - vW * s) / 2;
+        } else {
+            s = cW / vW;
+            oy = (cH - vH * s) / 2;
         }
 
         if (lastStablePoints) {
             corners = lastStablePoints.map(p => ({
-                x: (p.x + ox) / s,
-                y: (p.y + oy) / s
+                x: (p.x - ox) / s,
+                y: (p.y - oy) / s
             }));
         } else {
             corners = [ {x:vW*0.2,y:vH*0.2}, {x:vW*0.8,y:vH*0.2}, {x:vW*0.8,y:vH*0.8}, {x:vW*0.2,y:vH*0.8} ];
@@ -588,7 +586,7 @@ export function renderScanToPdf(container) {
         setTimeout(() => {
             drawEditScreen();
             initCornerHandles();
-        }, 120);
+        }, 150);
     };
 
     const drawEditScreen = () => {
@@ -604,7 +602,7 @@ export function renderScanToPdf(container) {
         ctx.closePath();
         
         ctx.strokeStyle = '#d4af37';
-        ctx.lineWidth = Math.max(8, editCanvas.width / 120);
+        ctx.lineWidth = Math.max(8, editCanvas.width / 150);
         ctx.stroke();
         ctx.fillStyle = 'rgba(212, 175, 55, 0.15)';
         ctx.fill();
@@ -612,31 +610,58 @@ export function renderScanToPdf(container) {
 
     const initCornerHandles = () => {
         cornerContainer.innerHTML = '';
+        const magnifier = document.getElementById('magnifier-canvas');
+        const magCtx = magnifier.getContext('2d');
         const rect = editCanvas.getBoundingClientRect();
-        const scaleX = rect.width / editCanvas.width;
-        const scaleY = rect.height / editCanvas.height;
+        const scX = rect.width / editCanvas.width;
+        const scY = rect.height / editCanvas.height;
 
         corners.forEach((pt, idx) => {
             const handle = document.createElement('div');
             handle.className = 'corner-handle';
-            handle.style.left = `${pt.x * scaleX}px`;
-            handle.style.top = `${pt.y * scaleY}px`;
+            handle.style.left = `${pt.x * scX}px`;
+            handle.style.top = `${pt.y * scY}px`;
+            handle.style.pointerEvents = 'auto'; // Re-enable pointer on handle itself
             
             let isDragging = false;
             const onMove = (e) => {
                 if (!isDragging) return;
                 const canvasRect = editCanvas.getBoundingClientRect();
                 const touch = e.touches ? e.touches[0] : e;
-                const x = (touch.clientX - canvasRect.left) / scaleX;
-                const y = (touch.clientY - canvasRect.top) / scaleY;
-                corners[idx] = { x: Math.max(0, Math.min(x, editCanvas.width)), y: Math.max(0, Math.min(y, editCanvas.height)) };
-                handle.style.left = `${corners[idx].x * scaleX}px`;
-                handle.style.top = `${corners[idx].y * scaleY}px`;
+                const x = (touch.clientX - canvasRect.left) / scX;
+                const y = (touch.clientY - canvasRect.top) / scY;
+                
+                const curX = Math.max(0, Math.min(x, editCanvas.width));
+                const curY = Math.max(0, Math.min(y, editCanvas.height));
+                corners[idx] = { x: curX, y: curY };
+                
+                // Update Handle
+                handle.style.left = `${curX * scX}px`;
+                handle.style.top = `${curY * scY}px`;
+                
+                // Update Magnifier
+                magnifier.style.display = 'block';
+                magCtx.clearRect(0,0,150,150);
+                magCtx.drawImage(rawImageData, curX - 37, curY - 37, 75, 75, 0, 0, 150, 150);
+                magCtx.beginPath();
+                magCtx.strokeStyle = '#d4af37';
+                magCtx.lineWidth = 4;
+                magCtx.arc(75, 75, 5, 0, Math.PI * 2);
+                magCtx.stroke();
+                
                 drawEditScreen();
             };
 
-            const onEnd = () => isDragging = false;
-            handle.onmousedown = handle.ontouchstart = (e) => { isDragging = true; e.preventDefault(); };
+            const onEnd = () => { 
+                isDragging = false; 
+                magnifier.style.display = 'none';
+            };
+            
+            handle.onmousedown = handle.ontouchstart = (e) => { 
+                isDragging = true; 
+                e.preventDefault(); 
+            };
+            
             window.addEventListener('mousemove', onMove);
             window.addEventListener('touchmove', onMove, {passive: false});
             window.addEventListener('mouseup', onEnd);
