@@ -43,7 +43,7 @@ export function renderScanToPdf(container) {
 
                 <div id="scanner-interface" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 20px;">
                     <video id="scan-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
-                    <canvas id="overlay-canvas" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 10;"></canvas>
+                    <canvas id="overlay-canvas" style="position: absolute; top:0; left:0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
                     
                     <!-- HUD Overlay -->
                     <div id="scan-hud" style="position: absolute; top: 1.5rem; left: 1.5rem; right: 1.5rem; display: flex; justify-content: space-between; align-items: start; pointer-events: none; z-index: 20;">
@@ -218,8 +218,10 @@ export function renderScanToPdf(container) {
                         galleryStage.style.display = 'none';
                         editStage.style.display = 'none';
                         
-                        overlay.width = video.videoWidth;
-                        overlay.height = video.videoHeight;
+                        // Set canvas to display size (client pixels) instead of source resolution
+                        // This bypasses complex object-fit scaling issues
+                        overlay.width = video.clientWidth;
+                        overlay.height = video.clientHeight;
                         
                         btnInit.disabled = false;
                         btnInit.innerHTML = originalBtnText;
@@ -399,19 +401,39 @@ export function renderScanToPdf(container) {
                 ctx.clearRect(0, 0, overlay.width, overlay.height);
 
                 if (bestPoints) {
-                    const ctx = overlay.getContext('2d');
-                    ctx.clearRect(0, 0, overlay.width, overlay.height);
+                    // DISPLAY SCALE MAPPING (Object-fit: Cover) logic
+                    const videoViewAspect = video.clientWidth / video.clientHeight;
+                    const videoSourceAspect = video.videoWidth / video.videoHeight;
+                    
+                    let scale = 1;
+                    let offsetX = 0;
+                    let offsetY = 0;
+
+                    if (videoViewAspect > videoSourceAspect) {
+                        // View is wider than source, source is cropped vertically
+                        scale = video.clientWidth / video.videoWidth;
+                        offsetY = (video.videoHeight * scale - video.clientHeight) / 2;
+                    } else {
+                        // View is narrower than source, source is cropped horizontally
+                        scale = video.clientHeight / video.videoHeight;
+                        offsetX = (video.videoWidth * scale - video.clientWidth) / 2;
+                    }
 
                     const pts = [];
                     for (let i = 0; i < 4; i++) {
+                        // Map source pixels to displayed pixels with crop offset
                         pts.push({ 
-                            x: bestPoints.data32S[i * 2] * ratio, 
-                            y: bestPoints.data32S[i * 2 + 1] * ratio 
+                            x: (bestPoints.data32S[i * 2] * ratio) * scale - offsetX, 
+                            y: (bestPoints.data32S[i * 2 + 1] * ratio) * scale - offsetY
                         });
                     }
                     
                     const ordered = orderPoints(pts);
-                    drawOverlay(ctx, ordered, true);
+                    
+                    const ctx = overlay.getContext('2d');
+                    ctx.clearRect(0, 0, overlay.width, overlay.height);
+                    drawOverlay(ctx, ordered, true, video, overlay);
+                    
                     lastStablePoints = ordered;
                     
                     if (autoCaptureEnabled) {
@@ -427,7 +449,7 @@ export function renderScanToPdf(container) {
                     ctx.clearRect(0, 0, overlay.width, overlay.height);
                     stabilityCounter = Math.max(0, stabilityCounter - 2);
                     if (lastStablePoints) {
-                        drawOverlay(ctx, lastStablePoints, false);
+                        drawOverlay(ctx, lastStablePoints, false, video, overlay);
                     }
                 }
 
@@ -458,8 +480,16 @@ export function renderScanToPdf(container) {
         return [tl, tr, br, bl];
     };
 
-    const drawOverlay = (ctx, pts, active) => {
+    const drawOverlay = (ctx, pts, active, video, canvas) => {
+        // PRECISION MAPPING: Align internal coordinates to the displayed "object-fit: cover" video
+        // We calculate how the browser fits the videoWidth/Height into the canvas CSS width/height
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        
         ctx.save();
+        
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         ctx.lineTo(pts[1].x, pts[1].y);
@@ -477,24 +507,22 @@ export function renderScanToPdf(container) {
         ctx.lineWidth = 10;
         ctx.stroke();
 
-        // Inner translucent fill
         ctx.fillStyle = glowColor;
         ctx.fill();
 
-        // Animated "Scan Line" if active
         if (active) {
             const time = Date.now() / 1000;
             const scanY = (Math.sin(time * 3) + 1) / 2; // oscillates 0 to 1
-            const minX = Math.min(pts[0].x, pts[3].x);
-            const maxX = Math.max(pts[1].x, pts[2].x);
-            const minY = Math.min(pts[0].y, pts[1].y);
-            const maxY = Math.max(pts[2].y, pts[3].y);
+            const minX = Math.min(pts[0].x, pts[3].x, pts[1].x, pts[2].x);
+            const maxX = Math.max(pts[1].x, pts[2].x, pts[0].x, pts[3].x);
+            const minY = Math.min(pts[0].y, pts[1].y, pts[2].y, pts[3].y);
+            const maxY = Math.max(pts[2].y, pts[3].y, pts[0].y, pts[1].y);
             const currentY = minY + (maxY - minY) * scanY;
             
             ctx.beginPath();
             ctx.moveTo(minX, currentY);
             ctx.lineTo(maxX, currentY);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.8)';
             ctx.lineWidth = 4;
             ctx.stroke();
         }
