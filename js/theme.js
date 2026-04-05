@@ -9,28 +9,38 @@ export function initTheme() {
 
     const icon = toggleBtn.querySelector('i');
     
-    // Set initial theme based on localStorage, default to dark
+    const themes = ['dark', 'light', 'oled', 'sepia', 'cyber'];
+    const icons = {
+        'dark': 'fa-sun',
+        'light': 'fa-moon',
+        'oled': 'fa-ghost',
+        'sepia': 'fa-coffee',
+        'cyber': 'fa-bolt-lightning'
+    };
+    
+    // Set initial theme
     const currentTheme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', currentTheme);
-    
-    if (icon) {
-        icon.className = currentTheme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
-    }
+    if (icon) icon.className = 'fa-solid ' + (icons[currentTheme] || 'fa-sun');
     
     // Remove existing listener to prevent duplicates
     const newToggleBtn = toggleBtn.cloneNode(true);
     toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
 
+    // Toggle Logic
     newToggleBtn.addEventListener('click', () => {
-        const theme = document.documentElement.getAttribute('data-theme');
-        const newTheme = theme === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
+        const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+        const currentIndex = themes.indexOf(theme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        const nextTheme = themes[nextIndex];
         
-        const newIcon = newToggleBtn.querySelector('i');
-        if (newIcon) {
-            newIcon.className = newTheme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        localStorage.setItem('theme', nextTheme);
+        
+        if (icon) {
+            icon.className = 'fa-solid ' + icons[nextTheme];
         }
+        window.showToast("Theme switched to: " + nextTheme.toUpperCase(), 'info');
     });
 }
 

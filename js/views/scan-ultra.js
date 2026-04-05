@@ -1,4 +1,5 @@
 import { getPDFLib } from '../pdf-engine.js';
+import { STORES, getAll, setItem, removeItem, clearStore } from '../db.js';
 
 /**
  * Scan to PDF View - Adobe Scan Replica v22.1 
@@ -24,6 +25,23 @@ export function renderScanToPdf(container) {
     let processing = false;
     let torchState = false;
     let brightnessCheckCounter = 0;
+
+    // Load Persistent Scans from DB
+    const loadPersistentScans = async () => {
+        try {
+            const scans = await getAll(STORES.WIP_SCANS);
+            if (scans && scans.length > 0) {
+                // Documents should be sorted by id (timestamp)
+                capturedPages = scans.sort((a,b) => a.id - b.id).map(s => s.data);
+                if (capturedPages.length > 0) {
+                    document.getElementById('floating-gallery-thumb').style.display = 'block';
+                    document.getElementById('last-scan-preview').src = capturedPages[capturedPages.length - 1];
+                    document.getElementById('scan-count-badge').innerText = capturedPages.length;
+                    window.showToast(`Restored ${capturedPages.length} scans from previous session`, "info");
+                }
+            }
+        } catch (e) { console.error("Persistence Load Error:", e); }
+    };
     
     // 1. UI Infrastructure
     container.innerHTML = `
@@ -170,6 +188,9 @@ export function renderScanToPdf(container) {
 
     const startScanner = async () => {
         btnInit.disabled = true;
+        // Perform one-time check for persistent scans when scanner starts
+        if (capturedPages.length === 0) await loadPersistentScans();
+        
         try {
             const getCamera = async (mode) => {
                 const configs = [{ video: { facingMode: mode, width: { ideal: 1920 }, height: { ideal: 1080 } } }, { video: true }];
@@ -395,7 +416,12 @@ export function renderScanToPdf(container) {
         else if (selectedFilter === 'grayscale') cv.cvtColor(dst, dst, cv.COLOR_RGBA2GRAY);
         else if (selectedFilter === 'scan') { cv.cvtColor(dst, dst, cv.COLOR_RGBA2GRAY); cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 21, 15); }
         const dataUrl = (() => { const c = document.createElement('canvas'); cv.imshow(c, dst); return c.toDataURL('image/jpeg', 0.92); })();
-        capturedPages.push(dataUrl); src.delete(); dst.delete(); srcCoords.delete(); dstCoords.delete(); M.delete();
+        capturedPages.push(dataUrl); 
+        
+        // Save to DB for persistence
+        await setItem(STORES.WIP_SCANS, { id: Date.now(), data: dataUrl });
+
+        src.delete(); dst.delete(); srcCoords.delete(); dstCoords.delete(); M.delete();
         processing = false; document.getElementById('floating-gallery-thumb').style.display = 'block'; document.getElementById('last-scan-preview').src = dataUrl;
         document.getElementById('scan-count-badge').innerText = capturedPages.length;
         editStage.style.display = 'none'; startScanner();
@@ -406,7 +432,21 @@ export function renderScanToPdf(container) {
         capturedPages.forEach((src, idx) => {
             const thumb = document.createElement('div'); thumb.className = 'scan-thumb';
             thumb.innerHTML = `<img src="${src}"><button class="btn-del-thumb" data-idx="${idx}"><i class="fa-solid fa-trash-can"></i></button>`;
-            thumb.querySelector('.btn-del-thumb').onclick = (e) => { e.stopPropagation(); capturedPages.splice(idx, 1); updateGallery(); if (capturedPages.length === 0) { document.getElementById('floating-gallery-thumb').style.display = 'none'; galleryStage.style.display = 'none'; } };
+            thumb.querySelector('.btn-del-thumb').onclick = async (e) => { 
+                e.stopPropagation(); 
+                
+                // Persistence removal
+                const scans = await getAll(STORES.WIP_SCANS);
+                const sorted = scans.sort((a,b) => a.id - b.id);
+                if (sorted[idx]) await removeItem(STORES.WIP_SCANS, sorted[idx].id);
+
+                capturedPages.splice(idx, 1); 
+                updateGallery(); 
+                if (capturedPages.length === 0) { 
+                    document.getElementById('floating-gallery-thumb').style.display = 'none'; 
+                    galleryStage.style.display = 'none'; 
+                } 
+            };
             scanGallery.appendChild(thumb);
         });
     };
@@ -435,6 +475,10 @@ export function renderScanToPdf(container) {
                 const page = pdfDoc.addPage([image.width, image.height]); page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
             }
             const pdfBytes = await pdfDoc.save(); window.downloadBlob(new Blob([pdfBytes], {type: 'application/pdf'}), `Adobe_Scan_${Date.now()}.pdf`);
+            
+            // Clear persistence upon successful export
+            await clearStore(STORES.WIP_SCANS);
+
             capturedPages = []; document.getElementById('floating-gallery-thumb').style.display = 'none'; galleryStage.style.display = 'none'; placeholder.style.display = 'flex';
         } catch (err) {} finally { processing = false; btnExport.disabled = false; }
     };

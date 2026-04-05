@@ -18,6 +18,32 @@
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
 }
 
+[data-theme="oled"] {
+    --bg-color: #000000;
+    --text-color: #ffffff;
+    --card-bg: rgba(0, 0, 0, 0.9);
+    --border-color: rgba(255, 255, 255, 0.15);
+    --glass-shadow: 0 0 20px rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="sepia"] {
+    --bg-color: #f4ecd8;
+    --text-color: #433422;
+    --card-bg: rgba(235, 221, 186, 0.7);
+    --border-color: rgba(0, 0, 0, 0.1);
+    --gold: #8b4513; /* Saddle Brown */
+    --brand-dark: #2d1b0d;
+}
+
+[data-theme="cyber"] {
+    --bg-color: #0d0221;
+    --text-color: #00ffcc;
+    --card-bg: rgba(15, 1, 46, 0.8);
+    --gold: #ff00ff; /* Neon Pink */
+    --border-color: #00ffcc;
+    --glass-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+}
+
 * {
     box-sizing: border-box;
     margin: 0;

@@ -1,4 +1,5 @@
 import { renderHome } from './views/home.js';
+import { STORES, setItem } from './db.js';
 import { initTheme } from './theme.js';
 import { renderMerge } from './views/merge.js';
 import { renderSplit } from './views/split.js';
@@ -107,7 +108,7 @@ window.formatSize = function(bytes) {
 };
 
 // Global File Download Handlers
-window.downloadBlob = function(blob, filename) {
+window.downloadBlob = function(blob, filename, toolName = "PDF Luxe Tool") {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -117,6 +118,13 @@ window.downloadBlob = function(blob, filename) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     window.showToast("Downloaded " + filename, 'success');
+
+    // Automatically add to industrial history
+    setItem(STORES.FILE_HISTORY, {
+        fileName: filename,
+        tool: toolName,
+        timestamp: Date.now()
+    }).catch(e => console.warn("History log failed:", e));
 };
 
 

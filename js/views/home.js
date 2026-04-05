@@ -1,8 +1,23 @@
-export function renderHome(container) {
+import { STORES, getAll, removeItem } from '../db.js';
+
+export async function renderHome(container) {
     container.innerHTML = `
         <section class="hero">
             <h1>Premium PDF Tools, <span class="text-gold">Zero Uploads.</span></h1>
             <p>Fast, secure, and 100% client-side PDF processing. Your files never leave your device.</p>
+        </section>
+
+        <!-- RECENT ACTIVITY SECTION -->
+        <section id="recent-activity" style="display: none; padding: 0 2rem; max-width: 1200px; margin: 0 auto 3rem; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-clock-rotate-left" style="color: var(--gold);"></i> Recent Activity
+                </h2>
+                <button id="btn-clear-history" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.8rem;">Clear All</button>
+            </div>
+            <div id="history-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+                <!-- History Items -->
+            </div>
         </section>
 
         <section class="tool-grid">
@@ -93,4 +108,25 @@ export function renderHome(container) {
             </a>
         </section>
     `;
+
+    // Load History
+    const historySection = document.getElementById('recent-activity');
+    const historyList = document.getElementById('history-list');
+
+    try {
+        const history = await getAll(STORES.FILE_HISTORY);
+        if (history && history.length > 0) {
+            historySection.style.display = 'block';
+            history.sort((a,b) => b.timestamp - a.timestamp).slice(0, 4).forEach(item => {
+                const card = document.createElement('div');
+                card.style = "background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); position: relative;";
+                card.innerHTML = `
+                    <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; color: var(--gold); text-transform: uppercase;">${item.tool}</div>
+                    <div style="font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 5px;">${item.fileName}</div>
+                    <div style="font-size: 0.7rem; opacity: 0.6;">${new Date(item.timestamp).toLocaleString()}</div>
+                `;
+                historyList.appendChild(card);
+            });
+        }
+    } catch (e) { console.error("History load error:", e); }
 }
