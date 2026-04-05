@@ -1,13 +1,13 @@
-import { imageToPdfBackend } from '../api-client.js';
+import { getPDFLib } from '../pdf-engine.js';
 
 /**
- * Refactored Image to PDF view using Backend-Driven Architecture
+ * Image to PDF (Client-Side Logic Restored for GitHub Pages)
  */
 export function renderImgToPdf(container) {
     container.innerHTML = `
         <div class="workspace">
-            <h2>Industrial Image to PDF</h2>
-            <p style="opacity: 0.8; margin-top: 0.5rem;">Convert your JPG/PNG images into a single PDF document securely via our backend engine.</p>
+            <h2>Image to PDF</h2>
+            <p style="opacity: 0.8; margin-top: 0.5rem;">Convert your JPG/PNG images into a single PDF document (100% Client-Side).</p>
             
             <div class="upload-area" id="i2p-upload">
                 <i class="fa-solid fa-file-image upload-icon"></i>
@@ -19,7 +19,7 @@ export function renderImgToPdf(container) {
             <div class="file-list" id="i2p-file-list"></div>
             
             <button class="btn-primary" id="btn-process-i2p" style="display: none; margin-top: 2rem;">
-                <i class="fa-solid fa-file-pdf"></i> Create PDF (Secure Backend)
+                <i class="fa-solid fa-file-pdf"></i> Create PDF Now
             </button>
         </div>
     `;
@@ -84,23 +84,65 @@ export function renderImgToPdf(container) {
         handleFiles(e.dataTransfer.files);
     });
 
+    const processImage = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    canvas.toBlob((blob) => {
+                        blob.arrayBuffer().then(resolve).catch(reject);
+                    }, 'image/jpeg', 0.9);
+                };
+                img.onerror = () => reject(new Error(`Failed to load image: ${file.name}`));
+                img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+            reader.readAsDataURL(file);
+        });
+    };
+
     btnProcess.addEventListener('click', async () => {
         const originalText = btnProcess.innerHTML;
-        btnProcess.innerHTML = '<div class="loader"></div> Processing on Server...';
+        btnProcess.innerHTML = '<div class="loader"></div> Processing locally...';
         btnProcess.disabled = true;
 
         try {
-            // Processing logic relocated to /api/image-to-pdf.js
-            const processedBlob = await imageToPdfBackend(selectedFiles);
+            const pLib = getPDFLib();
+            if (!pLib) throw new Error("PDF library not loaded.");
+            const { PDFDocument } = pLib;
+
+            const pdfDoc = await PDFDocument.create();
             
-            window.downloadBlob(processedBlob, 'PDFLuxe_Images.pdf');
-            window.showToast('PDF Created successfully via backend!', 'success');
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                btnProcess.innerHTML = `<div class="loader"></div> Processing ${i+1}/${selectedFiles.length}...`;
+                const normalizedBuffer = await processImage(file);
+                const image = await pdfDoc.embedJpg(normalizedBuffer);
+                const page = pdfDoc.addPage([image.width, image.height]);
+                page.drawImage(image, {
+                    x: 0,
+                    y: 0,
+                    width: image.width,
+                    height: image.height,
+                });
+            }
+            
+            const pdfBytes = await pdfDoc.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            window.downloadBlob(blob, 'PDFLuxe_Images.pdf');
+            window.showToast('PDF Created successfully!', 'success');
             
             selectedFiles = [];
             updateFileList();
         } catch (error) {
             console.error(error);
-            window.showToast('Backend Error: ' + (error.message || error), 'error');
+            window.showToast(error.message || 'Error converting images to PDF.', 'error');
         } finally {
             btnProcess.innerHTML = originalText;
             btnProcess.disabled = false;

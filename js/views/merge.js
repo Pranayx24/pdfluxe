@@ -1,13 +1,15 @@
-import { getPDFJS } from '../pdf-engine.js';
-import { mergePDFsBackend } from '../api-client.js';
+import { mergePDFs, getPDFJS } from '../pdf-engine.js';
 
+/**
+ * Visual Merger (Client-Side Logic Restored for GitHub Pages)
+ */
 export function renderMerge(container) {
     container.innerHTML = `
         <div class="workspace" style="max-width: 1200px;">
             <div class="tool-header">
                 <i class="fa-solid fa-layer-group tool-header-icon" style="color: #9b59b6;"></i>
-                <h2>Industrial Visual Merger</h2>
-                <p>Combine multiple PDF files into one securely via our serverless processing engine.</p>
+                <h2>Visual Merger</h2>
+                <p>Combine multiple PDF files into one by dragging them into your desired order (Processed locally).</p>
             </div>
 
             <div class="upload-area" id="merge-upload">
@@ -36,9 +38,9 @@ export function renderMerge(container) {
 
                 <div style="margin-top: 3rem; text-align: center;">
                     <button class="btn-primary" id="btn-process-merge" style="width: auto; padding: 1rem 4rem; background: linear-gradient(135deg, #9b59b6, #8e44ad); color: #fff;">
-                        <i class="fa-solid fa-object-group"></i> Merge via Secure Backend
+                        <i class="fa-solid fa-object-group"></i> Merge All Documents
                     </button>
-                    <p style="margin-top: 1rem; opacity: 0.6; font-size: 0.9rem;">Files are processed on our secure infrastructure and never stored permanently.</p>
+                    <p style="margin-top: 1rem; opacity: 0.6; font-size: 0.9rem;">Files will be merged in the order they appear above (left to right, top to bottom).</p>
                 </div>
             </div>
         </div>
@@ -219,22 +221,20 @@ export function renderMerge(container) {
         }
 
         const originalBtn = elements.btnProcess.innerHTML;
-        elements.btnProcess.innerHTML = '<div class="loader" style="border-top-color: #fff;"></div> Contacting Secure Engine...';
+        elements.btnProcess.innerHTML = '<div class="loader" style="border-top-color: #fff;"></div> merging locally...';
         elements.btnProcess.disabled = true;
 
         try {
-            // Get files in current DOM order
             const cardIds = Array.from(elements.grid.children).map(c => c.dataset.id);
             const orderedFiles = cardIds.map(id => selectedFiles.find(f => f.id === id).file);
 
-            // Logic relocated to backend: /api/merge-pdf.js
-            const processedBlob = await mergePDFsBackend(orderedFiles);
-            
-            window.downloadBlob(processedBlob, `Merged_PDFLuxe.pdf`, "Visual Merger");
-            window.showToast("Documents merged securely on server!", "success");
+            const resultBytes = await mergePDFs(orderedFiles);
+            const blob = new Blob([resultBytes], { type: 'application/pdf' });
+            window.downloadBlob(blob, `Merged_PDFLuxe.pdf`, "Visual Merger");
+            window.showToast("Documents merged successfully!", "success");
         } catch (err) {
             console.error(err);
-            window.showToast("Server Merging failed: " + err.message, "error");
+            window.showToast("Merging failed: " + err.message, "error");
         } finally {
             elements.btnProcess.innerHTML = originalBtn;
             elements.btnProcess.disabled = false;

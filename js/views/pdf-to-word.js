@@ -1,10 +1,13 @@
-import { pdfToWordBackend } from '../api-client.js';
+import { getPDFJS } from '../pdf-engine.js';
 
+/**
+ * PDF to Word View (Client-Side Logic Restored for GitHub Pages)
+ */
 export function renderPdfToWord(container) {
     container.innerHTML = `
         <div class="workspace">
-            <h2>Industrial-Grade Word Converter</h2>
-            <p style="opacity: 0.8; margin-top: 0.5rem;">Securely extract text from your PDF into an editable Word document via our serverless backend engine.</p>
+            <h2>PDF to Word Converter</h2>
+            <p style="opacity: 0.8; margin-top: 0.5rem;">Extract text from your PDF into an editable Word document securely (100% Client-Side).</p>
             
             <div class="upload-area" id="ptow-upload">
                 <i class="fa-solid fa-file-word upload-icon" style="color: #2b579a;"></i>
@@ -16,7 +19,7 @@ export function renderPdfToWord(container) {
             <div class="file-list" id="ptow-file-list"></div>
             
             <button class="btn-primary" id="btn-process-ptow" style="display: none; margin-top: 2rem;">
-                <i class="fa-solid fa-cloud-arrow-up"></i> Convert to Word (Secure Backend)
+                <i class="fa-solid fa-file-export"></i> Convert to Word (Local)
             </button>
         </div>
     `;
@@ -78,21 +81,98 @@ export function renderPdfToWord(container) {
 
     btnProcess.addEventListener('click', async () => {
         const originalText = btnProcess.innerHTML;
-        btnProcess.innerHTML = '<div class="loader"></div> Processing on Server...';
+        btnProcess.innerHTML = '<div class="loader"></div> Extracting Text...';
         btnProcess.disabled = true;
 
         try {
-            // Logic relocated to secure backend: /api/pdf-to-word.js
-            const processedBlob = await pdfToWordBackend(selectedFile);
+            const pJS = getPDFJS();
+            if (!pJS) throw new Error("pdf.js library not loaded.");
+
+            const fileUrl = URL.createObjectURL(selectedFile);
+            const loadingTask = pJS.getDocument(fileUrl);
+            const pdf = await loadingTask.promise;
             
+            const docChildren = [];
+            let hasText = false;
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                btnProcess.innerHTML = `<div class="loader"></div> Processing Page ${i} / ${pdf.numPages}...`;
+                
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                const items = textContent.items.sort((a, b) => {
+                    const yDiff = b.transform[5] - a.transform[5];
+                    if (Math.abs(yDiff) > 5) return yDiff; 
+                    return a.transform[4] - b.transform[4];
+                });
+                
+                let lastY = -1;
+                let paragraphText = "";
+                let isFirstPageNode = true;
+                
+                items.forEach((item) => {
+                    hasText = true;
+                    const text = item.str;
+                    
+                    if (lastY !== -1) {
+                         const yDiff = Math.abs(lastY - item.transform[5]);
+                         if (yDiff > 20) { 
+                             if (paragraphText.trim().length > 0) {
+                                 docChildren.push(new docx.Paragraph({
+                                     spacing: { after: 200 },
+                                     pageBreakBefore: (isFirstPageNode && i > 1),
+                                     children: [new docx.TextRun({ text: paragraphText.trim() })]
+                                 }));
+                                 if (isFirstPageNode) isFirstPageNode = false;
+                             }
+                             paragraphText = text + " ";
+                         } else if (yDiff > 5) {
+                            paragraphText += " " + text.trim() + " ";
+                         } else {
+                             paragraphText += text;
+                         }
+                    } else {
+                         paragraphText += text;
+                    }
+                    lastY = item.transform[5];
+                });
+                
+                if (paragraphText.trim().length > 0) {
+                    docChildren.push(new docx.Paragraph({
+                        spacing: { after: 200 },
+                        pageBreakBefore: (isFirstPageNode && i > 1),
+                        children: [new docx.TextRun({ text: paragraphText.trim() })]
+                    }));
+                }
+            }
+            
+            if (!hasText) {
+                 docChildren.push(new docx.Paragraph({
+                    children: [new docx.TextRun({ text: "No text could be extracted from this PDF. It may contain scanned images." })]
+                 }));
+            }
+            
+            btnProcess.innerHTML = '<div class="loader"></div> Generating Word File...';
+            
+            const doc = new docx.Document({
+                sections: [{
+                    properties: {},
+                    children: docChildren
+                }]
+            });
+            
+            const blob = await docx.Packer.toBlob(doc);
             const fileName = selectedFile.name.replace('.pdf', '') + '_Converted.docx';
-            window.downloadBlob(processedBlob, fileName);
             
-            window.showToast('Converted securely!', 'success');
+            window.downloadBlob(blob, fileName);
+            window.showToast('Converted to Word successfully!', 'success');
+            
+            URL.revokeObjectURL(fileUrl);
             
         } catch (error) {
             console.error(error);
-            window.showToast('Backend Error: ' + (error.message || error), 'error');
+            window.showToast('Error: ' + (error.message || error), 'error');
         } finally {
             btnProcess.innerHTML = originalText;
             btnProcess.disabled = false;
