@@ -436,24 +436,36 @@ export function renderScanToPdf(container) {
         scanGallery.innerHTML = ''; document.getElementById('gallery-title').innerText = `Document (${capturedPages.length} Pages)`;
         capturedPages.forEach((src, idx) => {
             const thumb = document.createElement('div'); thumb.className = 'scan-thumb';
-            thumb.innerHTML = `<img src="${src}"><button class="btn-del-thumb" data-idx="${idx}"><i class="fa-solid fa-trash-can"></i></button>`;
+            thumb.dataset.id = idx; // Important for Sortable
+            thumb.innerHTML = `<img src="${src}" style="pointer-events:none;"><button class="btn-del-thumb" data-idx="${idx}"><i class="fa-solid fa-trash-can"></i></button>`;
             thumb.querySelector('.btn-del-thumb').onclick = async (e) => { 
                 e.stopPropagation(); 
-                
-                // Persistence removal
-                const scans = await getAll(STORES.WIP_SCANS);
-                const sorted = scans.sort((a,b) => a.id - b.id);
-                if (sorted[idx]) await removeItem(STORES.WIP_SCANS, sorted[idx].id);
-
                 capturedPages.splice(idx, 1); 
                 updateGallery(); 
                 if (capturedPages.length === 0) { 
-                    document.getElementById('floating-gallery-thumb').style.display = 'none'; 
                     galleryStage.style.display = 'none'; 
                 } 
             };
             scanGallery.appendChild(thumb);
         });
+    };
+
+    const initSortable = () => {
+        if (window.Sortable) {
+            Sortable.create(scanGallery, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: () => {
+                    const newOrder = [];
+                    scanGallery.querySelectorAll('.scan-thumb').forEach(el => {
+                        newOrder.push(capturedPages[parseInt(el.dataset.id)]);
+                    });
+                    capturedPages.length = 0;
+                    capturedPages.push(...newOrder);
+                    updateGallery(); // Refresh with new indices
+                }
+            });
+        }
     };
 
     btnInit.onclick = startScanner;
@@ -468,7 +480,12 @@ export function renderScanToPdf(container) {
         btn.onclick = () => { document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); selectedFilter = btn.dataset.filter; };
     });
 
-    const showGallery = () => { editStage.style.display = 'none'; galleryStage.style.display = 'flex'; updateGallery(); };
+    const showGallery = () => { 
+        editStage.style.display = 'none'; 
+        galleryStage.style.display = 'flex'; 
+        updateGallery(); 
+        initSortable();
+    };
 
     btnExport.onclick = async () => {
         if (capturedPages.length === 0 || processing) return; const pLib = getPDFLib(); if (!pLib) return;

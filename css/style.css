@@ -229,6 +229,22 @@ body {
     color: var(--text-color);
     opacity: 0;
     animation: slideUpFade 0.5s ease-out forwards;
+    position: relative;
+    overflow: hidden;
+}
+
+.tool-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(400px circle at var(--mouse-x) var(--mouse-y), rgba(212, 175, 55, 0.15), transparent 40%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+}
+
+.tool-card:hover::before {
+    opacity: 1;
 }
 
 .tool-card:hover {

@@ -25,6 +25,8 @@ import { renderScanToPdf } from './views/scan-ultra.js?v=20.0';
 import { renderBatch } from './views/batch.js';
 import { renderPdfToExcel } from './views/pdf-to-excel.js';
 import { renderRedact } from './views/redact.js';
+import { renderCompare } from './views/compare.js';
+import { renderMetadata } from './views/metadata.js';
 
 // Simple Hash Router for SPA
 const routes = {
@@ -51,6 +53,8 @@ const routes = {
     '#batch': renderBatch,
     '#pdf-to-excel': renderPdfToExcel,
     '#redact': renderRedact,
+    '#compare': renderCompare,
+    '#metadata': renderMetadata,
     '#about': renderAbout,
     '#privacy': renderPrivacy,
     '#contact': renderContact
@@ -179,10 +183,28 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initTheme();
         initUpgradeModal();
+        initOLEDGlow();
         router();
     });
 } else {
     initTheme();
     initUpgradeModal();
+    initOLEDGlow();
     router();
+}
+
+/**
+ * Premium OLED Glow Tracker
+ */
+function initOLEDGlow() {
+    document.addEventListener('mousemove', (e) => {
+        const cards = document.querySelectorAll('.tool-card');
+        cards.forEach(card => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--mouse-x', `${x}px`);
+            card.style.setProperty('--mouse-y', `${y}px`);
+        });
+    });
 }

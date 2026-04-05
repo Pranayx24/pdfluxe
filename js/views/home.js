@@ -121,6 +121,16 @@ export async function renderHome(container) {
                 <h3>Redact PDF</h3>
                 <p>Permanently remove sensitive text and metadata from documents.</p>
             </a>
+            <a href="#compare" class="tool-card" style="animation-delay: 2.1s">
+                <i class="fa-solid fa-scale-balanced tool-icon" style="color: #3498db;"></i>
+                <h3>Legal Compare</h3>
+                <p>Detect additions and deletions between two different PDF versions.</p>
+            </a>
+            <a href="#metadata" class="tool-card" style="animation-delay: 2.2s">
+                <i class="fa-solid fa-address-card tool-icon" style="color: #f1c40f;"></i>
+                <h3>Identity Editor</h3>
+                <p>Edit hidden document properties like Author and Copyright dates.</p>
+            </a>
         </section>
     `;
 
