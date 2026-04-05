@@ -227,39 +227,44 @@ export function renderSign(container) {
     };
 
     // --- Drag and Drop Placement (Mouse + Touch) ---
+    // --- Advanced Pointer-Based Drag and Resize (Unified Mouse/Touch) ---
     let isDragging = false;
     let isResizing = false;
     let startX, startY, startW, startH;
 
-    const startDrag = (e) => {
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-        
-        if (e.target.classList.contains('resize-handle')) {
-            isResizing = true;
-        } else {
-            isDragging = true;
+    const onPointerDown = (e) => {
+        // Only trigger on signature placeholder or resize handle
+        if (e.target.id === 'signature-placeholder' || e.target.classList.contains('resize-handle')) {
+            e.preventDefault();
+            
+            if (e.target.classList.contains('resize-handle')) {
+                isResizing = true;
+            } else {
+                isDragging = true;
+            }
+            
+            e.target.setPointerCapture(e.pointerId);
+            
+            startX = e.clientX;
+            startY = e.clientY;
+            startW = placeholderPos.w;
+            startH = placeholderPos.h;
         }
-        startX = clientX;
-        startY = clientY;
-        startW = placeholderPos.w;
-        startH = placeholderPos.h;
-        // e.preventDefault(); // Moved out to individual listeners for better stability
     };
 
-    const moveDrag = (e) => {
+    const onPointerMove = (e) => {
         if (!isDragging && !isResizing) return;
         
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        e.preventDefault();
+        
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
 
         if (isDragging) {
-            const dx = clientX - startX;
-            const dy = clientY - startY;
             placeholderPos.x += dx;
             placeholderPos.y += dy;
-            startX = clientX;
-            startY = clientY;
+            startX = e.clientX;
+            startY = e.clientY;
             
             // Constrain to canvas
             placeholderPos.x = Math.max(0, Math.min(pdfCanvas.width - placeholderPos.w, placeholderPos.x));
@@ -267,32 +272,27 @@ export function renderSign(container) {
             
             updatePlaceholderStyles();
         } else if (isResizing) {
-            const dx = clientX - startX;
-            const dy = clientY - startY;
-            placeholderPos.w = Math.max(50, startW + dx);
-            placeholderPos.h = Math.max(20, startH + dy);
+            placeholderPos.w = Math.max(40, startW + dx);
+            placeholderPos.h = Math.max(15, startH + dy);
             updatePlaceholderStyles();
         }
-        
-        if (e.cancelable) e.preventDefault();
     };
 
-    const stopDrag = () => {
-        isDragging = false;
-        isResizing = false;
+    const onPointerUp = (e) => {
+        if (isDragging || isResizing) {
+            isDragging = false;
+            isResizing = false;
+            try { e.target.releasePointerCapture(e.pointerId); } catch(err) {}
+        }
     };
 
-    sigPlaceholder.addEventListener('mousedown', startDrag);
-    sigPlaceholder.addEventListener('touchstart', (e) => {
-        startDrag(e);
-        if (e.cancelable) e.preventDefault();
-    }, { passive: false });
-
-    window.addEventListener('mousemove', moveDrag);
-    window.addEventListener('touchmove', moveDrag, { passive: false });
-
-    window.addEventListener('mouseup', stopDrag);
-    window.addEventListener('touchend', stopDrag);
+    // Attach listeners to the placeholder itself for initiation
+    sigPlaceholder.addEventListener('pointerdown', onPointerDown);
+    
+    // Window-level move and up for better tracking scope
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
 
     // --- File Handling ---
     const handleFile = async (file) => {
