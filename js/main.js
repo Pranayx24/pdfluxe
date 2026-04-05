@@ -77,6 +77,9 @@ function router() {
         const renderFunc = routes[currentHash] || renderHome;
         renderFunc(contentDiv);
         
+        // Ensure page scrolls to top on navigation
+        window.scrollTo(0, 0);
+        
         // Update active nav link
         document.querySelectorAll('.nav-links a').forEach(a => {
             if(a.getAttribute('href') === currentHash) {
@@ -179,6 +182,11 @@ function initUpgradeModal() {
             alert("🚀 Payment integration coming soon!");
         });
     }
+}
+
+// Prevent browser from restoring scroll position
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
 }
 
 window.addEventListener('hashchange', router);
