@@ -27,32 +27,32 @@ export async function renderHome(container) {
             <section class="tool-section">
                 <h2 class="category-title"><i class="fa-solid fa-star"></i> Basic PDF Tools</h2>
                 <div class="tool-grid">
-                    <a href="#merge" class="tool-card">
+                    <a href="merge-pdf.html" class="tool-card">
                         <i class="fa-solid fa-object-group tool-icon"></i>
                         <h3>Merge PDF</h3>
                         <p>Combine multiple PDFs into one unified document.</p>
                     </a>
-                    <a href="#split" class="tool-card">
+                    <a href="split-pdf.html" class="tool-card">
                         <i class="fa-solid fa-scissors tool-icon"></i>
                         <h3>Split PDF</h3>
                         <p>Extract pages or split a PDF into multiple distinct files.</p>
                     </a>
-                    <a href="#compress" class="tool-card">
+                    <a href="compress-pdf.html" class="tool-card">
                         <i class="fa-solid fa-compress tool-icon"></i>
                         <h3>Compress PDF</h3>
                         <p>Reduce file size without compromising on quality.</p>
                     </a>
-                    <a href="#pdf-to-img" class="tool-card">
+                    <a href="pdf-to-image.html" class="tool-card">
                         <i class="fa-solid fa-file-image tool-icon"></i>
                         <h3>PDF to Image</h3>
                         <p>Convert your PDFs into high-quality JPG or PNG images.</p>
                     </a>
-                    <a href="#img-to-pdf" class="tool-card">
+                    <a href="image-to-pdf.html" class="tool-card">
                         <i class="fa-solid fa-file-pdf tool-icon"></i>
                         <h3>Image to PDF</h3>
                         <p>Turn your images into a single PDF document.</p>
                     </a>
-                    <a href="#scan-to-pdf" class="tool-card">
+                    <a href="scan-to-pdf.html" class="tool-card">
                         <i class="fa-solid fa-camera tool-icon"></i>
                         <h3>Scan to PDF</h3>
                         <p>Use your camera to scan documents and create PDFs instantly.</p>
@@ -64,7 +64,7 @@ export async function renderHome(container) {
             <section class="tool-section">
                 <h2 class="category-title"><i class="fa-solid fa-repeat"></i> Convert PDF Tools</h2>
                 <div class="tool-grid">
-                    <a href="#pdf-to-word" class="tool-card">
+                    <a href="pdf-to-word.html" class="tool-card">
                         <i class="fa-solid fa-file-word tool-icon"></i>
                         <h3>PDF to Word</h3>
                         <p>Extract text from your PDFs into editable Word documents.</p>
@@ -74,7 +74,7 @@ export async function renderHome(container) {
                         <h3>PDF to Excel</h3>
                         <p>Recover tables and data from PDFs into editable XLSX spreadsheets.</p>
                     </a>
-                    <a href="#pdf-to-text" class="tool-card">
+                    <a href="pdf-to-text.html" class="tool-card">
                         <i class="fa-solid fa-file-export tool-icon"></i>
                         <h3>PDF to Text</h3>
                         <p>Export all text from your PDF into a plain text file.</p>
@@ -91,27 +91,27 @@ export async function renderHome(container) {
             <section class="tool-section">
                 <h2 class="category-title"><i class="fa-solid fa-pen-to-square"></i> Edit & Organize PDF</h2>
                 <div class="tool-grid">
-                    <a href="#rotate" class="tool-card">
+                    <a href="rotate-pdf.html" class="tool-card">
                         <i class="fa-solid fa-rotate-right tool-icon"></i>
                         <h3>Rotate PDF</h3>
                         <p>Rotate your PDFs to your preferred orientation.</p>
                     </a>
-                    <a href="#organize" class="tool-card">
+                    <a href="organize-pdf.html" class="tool-card">
                         <i class="fa-solid fa-folder-tree tool-icon"></i>
                         <h3>Organize PDF</h3>
                         <p>Reorder, remove, or rearrange pages easily.</p>
                     </a>
-                    <a href="#crop" class="tool-card">
+                    <a href="crop-pdf.html" class="tool-card">
                         <i class="fa-solid fa-crop tool-icon"></i>
                         <h3>Crop PDF</h3>
                         <p>Trim the edges and adjust margins of your PDF.</p>
                     </a>
-                    <a href="#page-numbers" class="tool-card">
+                    <a href="page-numbers-pdf.html" class="tool-card">
                         <i class="fa-solid fa-list-ol tool-icon"></i>
                         <h3>Page Numbers</h3>
                         <p>Add customizable page numbers to your document.</p>
                     </a>
-                    <a href="#watermark" class="tool-card">
+                    <a href="watermark-pdf.html" class="tool-card">
                         <i class="fa-solid fa-stamp tool-icon"></i>
                         <h3>Add Watermark</h3>
                         <p>Stamp an image or text over your PDF in seconds.</p>
@@ -123,12 +123,12 @@ export async function renderHome(container) {
             <section class="tool-section">
                 <h2 class="category-title"><i class="fa-solid fa-shield-halved"></i> Security & Protection</h2>
                 <div class="tool-grid">
-                    <a href="#protect" class="tool-card">
+                    <a href="protect-pdf.html" class="tool-card">
                         <i class="fa-solid fa-lock tool-icon"></i>
                         <h3>Protect PDF</h3>
                         <p>Encrypt your PDF with a strong password locally.</p>
                     </a>
-                    <a href="#unlock" class="tool-card">
+                    <a href="unlock-pdf.html" class="tool-card">
                         <i class="fa-solid fa-unlock-keyhole tool-icon"></i>
                         <h3>Unlock PDF</h3>
                         <p>Remove passwords and security from protected PDFs.</p>
@@ -145,12 +145,12 @@ export async function renderHome(container) {
             <section class="tool-section">
                 <h2 class="category-title"><i class="fa-solid fa-microchip"></i> Advanced Tools</h2>
                 <div class="tool-grid">
-                    <a href="#sign" class="tool-card">
+                    <a href="sign-pdf.html" class="tool-card">
                         <i class="fa-solid fa-signature tool-icon"></i>
                         <h3>Sign PDF</h3>
                         <p>Add your digital signature to any PDF document.</p>
                     </a>
-                    <a href="#repair" class="tool-card">
+                    <a href="repair-pdf.html" class="tool-card">
                         <i class="fa-solid fa-hammer tool-icon"></i>
                         <h3>Repair PDF</h3>
                         <p>Fix corrupted or damaged PDF files with one click.</p>
@@ -172,7 +172,7 @@ export async function renderHome(container) {
             <section class="tool-section">
                 <h2 class="category-title"><i class="fa-solid fa-brain"></i> Smart / AI Tools</h2>
                 <div class="tool-grid">
-                    <a href="#ai-tools" class="tool-card highlight-card">
+                    <a href="ai-pdf.html" class="tool-card highlight-card">
                         <i class="fa-solid fa-comments tool-icon" style="color: #00ffcc;"></i>
                         <h3>Chat with PDF</h3>
                         <p>Ask questions and extract insights from your PDF using AI.</p>
