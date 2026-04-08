@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pdfluxe-v2.5';
+const CACHE_NAME = 'pdfluxe-v3.0';
 const ASSETS = [
     './',
     './index.html',
